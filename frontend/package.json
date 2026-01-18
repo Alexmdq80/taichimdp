@@ -1,0 +1,23 @@
+{
+    "name": "tai-chi-management-frontend",
+    "version": "1.0.0",
+    "description": "Frontend for Tai Chi Chuan Management System",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "test": "vitest"
+    },
+    "keywords": [
+        "tai-chi",
+        "management",
+        "frontend"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "vite": "^5.4.21",
+        "vitest": "^1.6.1"
+    }
+}

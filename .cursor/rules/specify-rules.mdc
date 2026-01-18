@@ -1,0 +1,30 @@
+﻿# taichimdp Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2026-01-15
+
+## Active Technologies
+
+- JavaScript (ES6+), HTML5, CSS3 + Vite (build tool), MySQL2 (driver para Node.js), Express.js (servidor backend mínimo) (001-tai-chi-management)
+
+## Project Structure
+
+```text
+backend/
+frontend/
+tests/
+```
+
+## Commands
+
+npm test; npm run lint
+
+## Code Style
+
+JavaScript (ES6+), HTML5, CSS3: Follow standard conventions
+
+## Recent Changes
+
+- 001-tai-chi-management: Added JavaScript (ES6+), HTML5, CSS3 + Vite (build tool), MySQL2 (driver para Node.js), Express.js (servidor backend mínimo)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
