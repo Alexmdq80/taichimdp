@@ -85,6 +85,60 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Migración completada exitosamente!" -ForegroundColor Green
 
+# Ejecutar migración 002
+Write-Host "Ejecutando script de migración 002_create_user_table.sql..." -ForegroundColor Yellow
+$migrationFile002 = Join-Path $PSScriptRoot "migrations\002_create_user_table.sql"
+
+if (-not (Test-Path $migrationFile002)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile002" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile002 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 002 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 002 completada exitosamente!" -ForegroundColor Green
+
+# Ejecutar migración 003
+Write-Host "Ejecutando script de migración 003_create_tipo_abono_table.sql..." -ForegroundColor Yellow
+$migrationFile003 = Join-Path $PSScriptRoot "migrations\003_create_tipo_abono_table.sql"
+
+if (-not (Test-Path $migrationFile003)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile003" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile003 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 003 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 003 completada exitosamente!" -ForegroundColor Green
+
+# Ejecutar migración 004
+Write-Host "Ejecutando script de migración 004_tipo_abono_soft_delete_history.sql..." -ForegroundColor Yellow
+$migrationFile004 = Join-Path $PSScriptRoot "migrations\004_tipo_abono_soft_delete_history.sql"
+
+if (-not (Test-Path $migrationFile004)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile004" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile004 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 004 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 004 completada exitosamente!" -ForegroundColor Green
+
 # Verificar tablas creadas
 Write-Host "`nVerificando tablas creadas..." -ForegroundColor Yellow
 $mysqlArgs = @("-u", $dbUser)

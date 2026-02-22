@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:4200',
   credentials: true
 }));
 app.use(express.json());
@@ -27,9 +27,13 @@ app.get('/health', async (req, res) => {
 // API routes
 import apiRoutes from './routes/index.js';
 import practicantesRoutes from './routes/practicantes.js';
+import authRoutes from './routes/auth.js'; // Import auth routes
+import tiposAbonoRoutes from './routes/tiposAbono.js'; // Import tiposAbono routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/tipos-abono', tiposAbonoRoutes); // Mount tiposAbono routes
 
 // 404 handler
 app.use((req, res) => {

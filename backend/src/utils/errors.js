@@ -44,6 +44,7 @@ export class ConflictError extends AppError {
  */
 export function errorHandler(err, req, res, next) {
   // Log error for debugging
+  console.error('Full Error Object:', err); // Added for more detailed debugging
   console.error('Error:', {
     message: err.message,
     stack: err.stack,

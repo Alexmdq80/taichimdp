@@ -1,9 +1,13 @@
 import express from 'express';
 import PracticanteService from '../../services/practicanteService.js';
-import { asyncHandler } from '../../utils/errors.js';
+import PagoService from '../../services/pagoService.js'; // Import PagoService
+import { asyncHandler, AppError } from '../../utils/errors.js'; // Import AppError
 import { sanitizeObject } from '../../utils/validators.js';
+import { authenticateToken } from '../../middleware/auth.js'; // Import the middleware
 
 const router = express.Router();
+
+router.use(authenticateToken); // Apply authentication middleware to all routes in this router
 
 /**
  * GET /api/practicantes
@@ -17,17 +21,11 @@ router.get('/', asyncHandler(async (req, res) => {
   const limitNum = parseInt(limit, 10);
   
   if (isNaN(pageNum) || pageNum < 1) {
-    return res.status(400).json({
-      error: 'Invalid query parameters',
-      details: 'page must be a positive integer'
-    });
+    throw new AppError('Invalid query parameters: page must be a positive integer', 400);
   }
   
   if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-    return res.status(400).json({
-      error: 'Invalid query parameters',
-      details: 'limit must be a positive integer between 1 and 100'
-    });
+    throw new AppError('Invalid query parameters: limit must be a positive integer between 1 and 100', 400);
   }
 
   const result = await PracticanteService.findAll({
@@ -47,10 +45,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   
   if (isNaN(id)) {
-    return res.status(400).json({
-      error: 'Invalid ID',
-      details: 'ID must be a valid integer'
-    });
+    throw new AppError('Invalid ID: ID must be a valid integer', 400);
   }
 
   const practicante = await PracticanteService.findById(id);
@@ -77,10 +72,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   
   if (isNaN(id)) {
-    return res.status(400).json({
-      error: 'Invalid ID',
-      details: 'ID must be a valid integer'
-    });
+    throw new AppError('Invalid ID: ID must be a valid integer', 400);
   }
 
   // Sanitize input
@@ -98,10 +90,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   
   if (isNaN(id)) {
-    return res.status(400).json({
-      error: 'Invalid ID',
-      details: 'ID must be a valid integer'
-    });
+    throw new AppError('Invalid ID: ID must be a valid integer', 400);
   }
 
   await PracticanteService.delete(id);
@@ -111,4 +100,38 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   });
 }));
 
-export default router;
+/**
+ * POST /api/practicantes/:id/pagar
+ * Record a payment for a practicante's subscription
+ */
+router.post('/:id/pagar', asyncHandler(async (req, res) => {
+    const practicanteId = parseInt(req.params.id, 10);
+    if (isNaN(practicanteId)) {
+        throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
+    }
+
+    const { tipo_abono_id, metodo_pago, notas } = req.body; // Destructure new fields
+    const tipoAbonoId = parseInt(tipo_abono_id, 10);
+    if (isNaN(tipoAbonoId) || tipoAbonoId <= 0) {
+        throw new AppError('Invalid Tipo de Abono ID: Must be a positive integer', 400);
+    }
+
+    const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas); // Pass new fields
+        res.status(201).json({ message: 'Payment recorded successfully', data: pago });
+    }));
+    
+    /**
+     * GET /api/practicantes/:id/pagos
+     * Get all payments for a specific practicante
+     */
+    router.get('/:id/pagos', asyncHandler(async (req, res) => {
+        const practicanteId = parseInt(req.params.id, 10);
+        if (isNaN(practicanteId)) {
+            throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
+        }
+    
+        const pagos = await PagoService.getPaymentsByPracticanteId(practicanteId);
+        res.status(200).json({ data: pagos });
+    }));
+    
+    export default router;

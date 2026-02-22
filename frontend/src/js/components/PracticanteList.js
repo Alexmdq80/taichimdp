@@ -5,7 +5,8 @@
 
 import { formatDateReadable } from '../utils/formatting.js';
 import { displayApiError, showSuccess } from '../utils/errors.js';
-import api from '../api/client.js';
+import { practicanteApi } from '../api/client.js';
+import { navigate } from '../router.js'; // Import navigate
 
 export class PracticanteList {
   constructor(container, options = {}) {
@@ -13,7 +14,8 @@ export class PracticanteList {
     this.options = {
       onSelect: options.onSelect || (() => {}),
       onEdit: options.onEdit || (() => {}),
-      onDelete: options.onDelete || (() => {})
+      onDelete: options.onDelete || (() => {}),
+      // onPayAbono: options.onPayAbono || (() => {}) // This option is no longer needed directly
     };
     this.practicantes = [];
     this.currentPage = 1;
@@ -97,7 +99,7 @@ export class PracticanteList {
         params.search = this.searchTerm;
       }
 
-      const result = await api.get('/practicantes', params);
+      const result = await practicanteApi.getAll(params.search, params.page, params.limit); // Use practicanteApi.getAll
       this.practicantes = result.data || [];
       this.totalPages = result.pagination?.totalPages || 1;
       this.currentPage = result.pagination?.page || 1;
@@ -136,6 +138,14 @@ export class PracticanteList {
               <td>${practicante.email ? this.escapeHtml(practicante.email) : '-'}</td>
               <td>${practicante.fecha_nacimiento ? formatDateReadable(practicante.fecha_nacimiento) : '-'}</td>
               <td>
+                <button 
+                  class="btn btn-primary" 
+                  data-action="pay" 
+                  data-id="${practicante.id}"
+                  style="margin-right: 0.5rem;"
+                >
+                  Pagar Abono
+                </button>
                 <button 
                   class="btn" 
                   data-action="view" 
@@ -243,12 +253,15 @@ export class PracticanteList {
           this.deletePracticante(id);
         }
         break;
+      case 'pay': // Handle the new 'pay' action
+        navigate(`/practicantes/${practicante.id}/pagar`); // Navigate to the payment URL
+        break;
     }
   }
 
   async deletePracticante(id) {
     try {
-      await api.delete(`/practicantes/${id}`);
+      await practicanteApi.delete(id); // Use practicanteApi.delete
       showSuccess('Practicante eliminado correctamente', this.container);
       this.loadPracticantes();
       if (this.options.onDelete) {

@@ -112,6 +112,73 @@ export function validatePracticante(data) {
 }
 
 /**
+ * Validate user data for registration
+ * @param {Object} data - User data
+ * @throws {ValidationError}
+ */
+export function validateUser(data) {
+    const errors = [];
+
+    // Validate email
+    if (!data.email || typeof data.email !== 'string' || data.email.trim() === '') {
+        errors.push({ field: 'email', message: 'Email is required' });
+    } else if (!isValidEmail(data.email)) {
+        errors.push({ field: 'email', message: 'Email must be a valid email address' });
+    }
+
+    // Validate password
+    if (!data.password || typeof data.password !== 'string' || data.password.trim() === '') {
+        errors.push({ field: 'password', message: 'Password is required' });
+    } else if (data.password.length < 8) {
+        errors.push({ field: 'password', message: 'Password must be at least 8 characters long' });
+    }
+    // Add more password complexity rules if desired, e.g.,
+    // else if (!/[A-Z]/.test(data.password)) { errors.push({ field: 'password', message: 'Password must contain at least one uppercase letter' }); }
+    // else if (!/[a-z]/.test(data.password)) { errors.push({ field: 'password', message: 'Password must contain at least one lowercase letter' }); }
+    // else if (!/[0-9]/.test(data.password)) { errors.push({ field: 'password', message: 'Password must contain at least one number' }); }
+    // else if (!/[^A-Za-z0-9]/.test(data.password)) { errors.push({ field: 'password', message: 'Password must contain at least one special character' }); }
+
+
+    if (errors.length > 0) {
+        throw new ValidationError('Validation failed', errors);
+    }
+}
+
+/**
+ * Validate TipoAbono data
+ * @param {Object} data - TipoAbono data
+ * @throws {ValidationError}
+ */
+export function validateTipoAbono(data) {
+    const errors = [];
+
+    // Validate nombre
+    if (!data.nombre || typeof data.nombre !== 'string' || data.nombre.trim() === '') {
+        errors.push({ field: 'nombre', message: 'Nombre is required' });
+    }
+
+    // Validate duracion_dias
+    if (data.duracion_dias !== undefined && data.duracion_dias !== null && data.duracion_dias !== '') {
+        const duracion = parseInt(data.duracion_dias, 10);
+        if (isNaN(duracion) || duracion <= 0) {
+            errors.push({ field: 'duracion_dias', message: 'Duración en días must be a positive integer' });
+        }
+    }
+
+    // Validate precio
+    if (data.precio !== undefined && data.precio !== null && data.precio !== '') {
+        const price = parseFloat(data.precio);
+        if (isNaN(price) || price <= 0) {
+            errors.push({ field: 'precio', message: 'Precio must be a positive number' });
+        }
+    }
+
+    if (errors.length > 0) {
+        throw new ValidationError('Validation failed', errors);
+    }
+}
+
+/**
  * Sanitize string input to prevent XSS
  * @param {string} input - Input string
  * @returns {string} - Sanitized string

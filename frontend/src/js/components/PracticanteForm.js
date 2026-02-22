@@ -5,7 +5,7 @@
 
 import { validateField, clearFieldError, showFieldError } from '../utils/validation.js';
 import { displayApiError, showError } from '../utils/errors.js';
-import api from '../api/client.js';
+import { makeRequest } from '../api/client.js'; // Changed to named import
 
 export class PracticanteForm {
   constructor(container, options = {}) {
@@ -246,9 +246,9 @@ export class PracticanteForm {
       let result;
 
       if (this.isEditing) {
-        result = await api.put(`/practicantes/${this.options.practicante.id}`, data);
+        result = await makeRequest(`/practicantes/${this.options.practicante.id}`, 'PUT', data, true); // Use makeRequest
       } else {
-        result = await api.post('/practicantes', data);
+        result = await makeRequest('/practicantes', 'POST', data, true); // Use makeRequest
       }
 
       submitBtn.disabled = false;

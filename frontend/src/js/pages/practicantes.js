@@ -6,16 +6,21 @@
 import PracticanteForm from '../components/PracticanteForm.js';
 import PracticanteList from '../components/PracticanteList.js';
 import PracticanteDetail from '../components/PracticanteDetail.js';
-import { showSuccess } from '../utils/errors.js';
+import { showSuccess, displayApiError } from '../utils/errors.js'; // Import displayApiError for error handling
+import { practicanteApi } from '../api/client.js'; // Import practicanteApi to fetch individual practicante
 
 export class PracticantesPage {
-    constructor(container) {
+    constructor(container, options = {}) {
         this.container = container;
+        this.options = {
+            initialPracticanteId: options.initialPracticanteId || null,
+            openPaymentModalInitially: options.openPaymentModalInitially || false,
+        };
         this.currentView = 'list'; // 'list', 'form', 'detail'
         this.selectedPracticante = null;
     }
 
-    render() {
+    async render() {
         this.container.innerHTML = `
       <div id="practicantes-page">
         <div id="practicantes-header" class="flex justify-between items-center" style="margin-bottom: 2rem;">
@@ -30,7 +35,12 @@ export class PracticantesPage {
     `;
 
         this.attachEvents();
-        this.showList();
+
+        if (this.options.initialPracticanteId) {
+            await this.loadAndShowPracticanteDetail(this.options.initialPracticanteId, this.options.openPaymentModalInitially);
+        } else {
+            this.showList();
+        }
     }
 
     attachEvents() {
@@ -38,6 +48,23 @@ export class PracticantesPage {
         newBtn.addEventListener('click', () => {
             this.showForm();
         });
+    }
+
+    async loadAndShowPracticanteDetail(practicanteId, openPaymentModal = false) {
+        try {
+            const response = await practicanteApi.getById(practicanteId);
+            this.selectedPracticante = response.data;
+            if (this.selectedPracticante) {
+                this.showDetail(this.selectedPracticante, openPaymentModal);
+            } else {
+                displayApiError({ message: 'Practicante no encontrado.' }, this.container);
+                this.showList(); // Fallback to list
+            }
+        } catch (error) {
+            console.error('Error loading practicante detail:', error);
+            displayApiError(error, this.container);
+            this.showList(); // Fallback to list on error
+        }
     }
 
     showList() {
@@ -52,14 +79,7 @@ export class PracticantesPage {
         const list = new PracticanteList(listContainer, {
             onSelect: (practicante) => {
                 this.selectedPracticante = practicante;
-                const detail = new PracticanteDetail(detailContainer, {
-                    onEdit: (p) => this.showForm(p),
-                    onClose: () => {
-                        this.selectedPracticante = null;
-                        detail.render(null);
-                    }
-                });
-                detail.render(practicante);
+                this.showDetail(practicante);
             },
             onEdit: (practicante) => {
                 this.showForm(practicante);
@@ -69,6 +89,10 @@ export class PracticantesPage {
                 if (detailContainer) {
                     detailContainer.innerHTML = '';
                 }
+            },
+            onPayAbono: (practicante) => { // Handle onPayAbono event
+                this.selectedPracticante = practicante;
+                this.showDetail(practicante, true); // Pass true to open payment modal
             }
         });
 
@@ -99,7 +123,7 @@ export class PracticantesPage {
         form.render();
     }
 
-    showDetail(practicante) {
+    showDetail(practicante, openPaymentModal = false) { // Added openPaymentModal parameter
         this.currentView = 'detail';
         const content = this.container.querySelector('#practicantes-content');
 
@@ -110,7 +134,8 @@ export class PracticantesPage {
             onEdit: (p) => this.showForm(p),
             onClose: () => {
                 this.showList();
-            }
+            },
+            openPaymentModal: openPaymentModal // Pass the parameter to PracticanteDetail
         });
 
         detail.render(practicante);

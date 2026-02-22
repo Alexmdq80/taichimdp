@@ -1,91 +1,63 @@
-/**
- * API client for communication with backend
- */
+const API_BASE_URL = 'http://localhost:3000/api'; // Or your backend API base URL
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export const makeRequest = async (endpoint, method = 'GET', data = null, authenticate = false) => {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
 
-/**
- * Make API request
- * @param {string} endpoint - API endpoint
- * @param {Object} options - Fetch options
- * @returns {Promise<Response>}
- */
-async function apiRequest(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
-  };
+    if (authenticate) {
+        const token = localStorage.getItem('token');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        } else {
+            // If authentication is required but no token is found, throw an error or redirect to login
+            throw new Error('No authentication token found. Please log in.');
+        }
+    }
 
-  // Add body if present
-  if (options.body && typeof options.body === 'object') {
-    config.body = JSON.stringify(options.body);
-  }
+    const config = {
+        method,
+        headers,
+    };
 
-  const response = await fetch(url, config);
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw { status: response.status, ...error };
-  }
+    if (data) {
+        config.body = JSON.stringify(data);
+    }
 
-  return response.json();
-}
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
-/**
- * GET request
- * @param {string} endpoint - API endpoint
- * @param {Object} params - Query parameters
- * @returns {Promise<any>}
- */
-export async function get(endpoint, params = {}) {
-  const queryString = new URLSearchParams(params).toString();
-  const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-  return apiRequest(url, { method: 'GET' });
-}
+    // If the token is invalid or expired, and it's not the login/register endpoint,
+    // we should probably redirect to the login page.
+    if (response.status === 401 || response.status === 403) {
+        if (!endpoint.startsWith('/auth')) { // Avoid redirect loops on auth endpoints
+            localStorage.removeItem('token');
+            window.location.href = '/login'; // Redirect to login page
+        }
+    }
 
-/**
- * POST request
- * @param {string} endpoint - API endpoint
- * @param {Object} data - Request body
- * @returns {Promise<any>}
- */
-export async function post(endpoint, data) {
-  return apiRequest(endpoint, {
-    method: 'POST',
-    body: data
-  });
-}
+    const responseData = await response.json();
 
-/**
- * PUT request
- * @param {string} endpoint - API endpoint
- * @param {Object} data - Request body
- * @returns {Promise<any>}
- */
-export async function put(endpoint, data) {
-  return apiRequest(endpoint, {
-    method: 'PUT',
-    body: data
-  });
-}
+    if (!response.ok) {
+        // If the backend returns an error, it should be in the responseData
+        const error = new Error(responseData.message || 'Something went wrong');
+        error.details = responseData.details || null;
+        error.status = response.status;
+        throw error;
+    }
 
-/**
- * DELETE request
- * @param {string} endpoint - API endpoint
- * @returns {Promise<any>}
- */
-export async function del(endpoint) {
-  return apiRequest(endpoint, { method: 'DELETE' });
-}
+    return responseData;
+};
 
-export default {
-  get,
-  post,
-  put,
-  delete: del
+// Specific API functions for convenience
+export const authApi = {
+    register: (email, password) => makeRequest('/auth/register', 'POST', { email, password }),
+    login: (email, password) => makeRequest('/auth/login', 'POST', { email, password }),
+};
+
+export const practicanteApi = {
+    getAll: (search = '', page = 1, limit = 50) => makeRequest(`/practicantes?search=${search}&page=${page}&limit=${limit}`, 'GET', null, true),
+    getById: (id) => makeRequest(`/practicantes/${id}`, 'GET', null, true),
+    create: (data) => makeRequest('/practicantes', 'POST', data, true),
+    update: (id, data) => makeRequest(`/practicantes/${id}`, 'PUT', data, true),
+    delete: (id) => makeRequest(`/practicantes/${id}`, 'DELETE', null, true),
 };

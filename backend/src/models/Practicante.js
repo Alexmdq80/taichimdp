@@ -53,11 +53,13 @@ export class Practicante {
     /**
      * Find practicante by ID
      * @param {number} id - Practicante ID
+     * @param {Object} [connection] - Database connection
      * @returns {Promise<Practicante|null>}
      */
-    static async findById(id) {
+    static async findById(id, connection = null) {
         const sql = 'SELECT * FROM Practicante WHERE id = ?';
-        const [rows] = await pool.execute(sql, [id]);
+        const executor = connection || pool;
+        const [rows] = await executor.execute(sql, [id]);
 
         if (rows.length === 0) {
             return null;

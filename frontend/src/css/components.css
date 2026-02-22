@@ -53,6 +53,14 @@ button:disabled,
   background-color: #059669;
 }
 
+.btn-info {
+  background-color: #0ea5e9;
+}
+
+.btn-info:hover {
+  background-color: #0284c7;
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 1.5rem;
@@ -168,13 +176,43 @@ button:disabled,
   background-color: var(--success-color);
 }
 
-.badge-error {
+.badge-info {
+  background-color: var(--primary-color);
+}
+
+.badge-error, .badge-danger {
   background-color: var(--error-color);
 }
 
 .badge-warning {
   background-color: var(--warning-color);
 }
+
+/* History Styles */
+.history-item {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.strike-through {
+  text-decoration: line-through;
+}
+
+/* Utilities */
+.flex { display: flex; }
+.justify-between { justify-content: space-between; }
+.items-center { align-items: center; }
+.gap-2 { gap: 0.5rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.text-sm { font-size: 0.875rem; }
+.list-unstyled { list-style: none; padding-left: 0; }
 
 /* Loading spinner */
 .spinner {
