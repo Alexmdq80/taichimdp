@@ -14,6 +14,7 @@ export class Pago {
         this.notas = data.notas || null;
         this.tipo_abono_nombre = data.tipo_abono_nombre || null; // New field from join
         this.practicante_nombre = data.practicante_nombre || null; // New field from join
+        this.categoria = data.categoria || null; // New field from join
         this.deleted_at = data.deleted_at || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
@@ -53,7 +54,7 @@ export class Pago {
      */
     static async findAll(filters = {}) {
         let sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre
+            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
@@ -65,6 +66,11 @@ export class Pago {
         if (filters.search) {
             sql += ' AND (pr.nombre_completo LIKE ? OR ta.nombre LIKE ?)';
             params.push(`%${filters.search}%`, `%${filters.search}%`);
+        }
+
+        if (filters.categoria) {
+            sql += ' AND ta.categoria = ?';
+            params.push(filters.categoria);
         }
 
         sql += ' ORDER BY p.fecha DESC, p.created_at DESC';
@@ -144,6 +150,7 @@ export class Pago {
             notas: this.notas,
             tipo_abono_nombre: this.tipo_abono_nombre, // New
             practicante_nombre: this.practicante_nombre, // New
+            categoria: this.categoria, // New
             deleted_at: this.deleted_at,
             created_at: this.created_at,
             updated_at: this.updated_at

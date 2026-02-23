@@ -10,6 +10,7 @@ export class TipoAbono {
         this.descripcion = data.descripcion !== undefined ? data.descripcion : null;
         this.duracion_dias = data.duracion_dias !== undefined ? data.duracion_dias : null;
         this.precio = data.precio !== undefined ? data.precio : null;
+        this.categoria = data.categoria || 'clase';
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
@@ -24,15 +25,16 @@ export class TipoAbono {
     static async create(data, userId = null) {
         const sql = `
             INSERT INTO TipoAbono (
-                nombre, descripcion, duracion_dias, precio
-            ) VALUES (?, ?, ?, ?)
+                nombre, descripcion, duracion_dias, precio, categoria
+            ) VALUES (?, ?, ?, ?, ?)
         `;
 
         const values = [
             data.nombre,
             data.descripcion !== undefined ? data.descripcion : null,
             data.duracion_dias !== undefined ? data.duracion_dias : null,
-            data.precio !== undefined ? data.precio : null
+            data.precio !== undefined ? data.precio : null,
+            data.categoria || 'clase'
         ];
 
         const [result] = await pool.execute(sql, values);
@@ -84,7 +86,7 @@ export class TipoAbono {
         const currentData = await this.findById(id);
         if (!currentData) return null;
 
-        const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio'];
+        const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'categoria'];
 
         const updates = [];
         const values = [];
@@ -199,6 +201,7 @@ export class TipoAbono {
             descripcion: this.descripcion,
             duracion_dias: this.duracion_dias,
             precio: this.precio,
+            categoria: this.categoria,
             created_at: this.created_at,
             updated_at: this.updated_at,
             deleted_at: this.deleted_at

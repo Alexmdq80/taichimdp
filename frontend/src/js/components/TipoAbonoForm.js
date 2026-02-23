@@ -96,6 +96,15 @@ export class TipoAbonoForm {
 
 
 
+        <div class="form-group">
+          <label for="categoria">Categoría *</label>
+          <select id="categoria" name="categoria" required>
+            <option value="clase" ${tipoAbono.categoria === 'clase' ? 'selected' : ''}>Clase / Abono Tai Chi</option>
+            <option value="cuota_club" ${tipoAbono.categoria === 'cuota_club' ? 'selected' : ''}>Cuota Social Club</option>
+            <option value="otro" ${tipoAbono.categoria === 'otro' ? 'selected' : ''}>Otro</option>
+          </select>
+        </div>
+
         <div class="flex gap-2">
 
           <button type="submit" class="btn">${this.isEditing ? 'Actualizar' : 'Guardar'}</button>          <button type="button" class="btn btn-secondary" id="cancel-btn">Cancelar</button>
@@ -111,7 +120,7 @@ export class TipoAbonoForm {
     const cancelBtn = this.container.querySelector('#cancel-btn');
 
     // Form validation on blur
-    const inputs = form.querySelectorAll('input, textarea');
+    const inputs = form.querySelectorAll('input, textarea, select');
     inputs.forEach(input => {
       input.addEventListener('blur', () => {
         this.validateField(input);
