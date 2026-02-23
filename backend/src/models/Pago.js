@@ -13,6 +13,8 @@ export class Pago {
         this.metodo_pago = data.metodo_pago || null;
         this.notas = data.notas || null;
         this.tipo_abono_nombre = data.tipo_abono_nombre || null; // New field from join
+        this.practicante_nombre = data.practicante_nombre || null; // New field from join
+        this.deleted_at = data.deleted_at || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
     }
@@ -45,6 +47,33 @@ export class Pago {
     }
 
     /**
+     * Find all payments
+     * @param {Object} [filters] - Optional filters
+     * @returns {Promise<Pago[]>}
+     */
+    static async findAll(filters = {}) {
+        let sql = `
+            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre
+            FROM Pago p
+            JOIN Abono a ON p.abono_id = a.id
+            JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            JOIN Practicante pr ON p.practicante_id = pr.id
+            WHERE p.deleted_at IS NULL
+        `;
+        const params = [];
+
+        if (filters.search) {
+            sql += ' AND (pr.nombre_completo LIKE ? OR ta.nombre LIKE ?)';
+            params.push(`%${filters.search}%`, `%${filters.search}%`);
+        }
+
+        sql += ' ORDER BY p.fecha DESC, p.created_at DESC';
+
+        const [rows] = await pool.execute(sql, params);
+        return rows.map(row => new Pago(row));
+    }
+
+    /**
      * Find payment by ID
      * @param {number} id - Pago ID
      * @param {Object} [connection] - Database connection
@@ -52,11 +81,12 @@ export class Pago {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre 
+            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
-            WHERE p.id = ?
+            JOIN Practicante pr ON p.practicante_id = pr.id
+            WHERE p.id = ? AND p.deleted_at IS NULL
         `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
@@ -79,7 +109,7 @@ export class Pago {
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
-            WHERE p.practicante_id = ? 
+            WHERE p.practicante_id = ? AND p.deleted_at IS NULL
             ORDER BY p.fecha DESC
         `;
         const [rows] = await pool.execute(sql, [practicanteId]);
@@ -87,13 +117,15 @@ export class Pago {
     }
 
     /**
-     * Delete payment
+     * Delete payment (Soft Delete)
      * @param {number} id - Pago ID
+     * @param {Object} [connection] - Database connection
      * @returns {Promise<boolean>}
      */
-    static async delete(id) {
-        const sql = 'DELETE FROM Pago WHERE id = ?';
-        const [result] = await pool.execute(sql, [id]);
+    static async delete(id, connection = null) {
+        const sql = 'UPDATE Pago SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?';
+        const executor = connection || pool;
+        const [result] = await executor.execute(sql, [id]);
         return result.affectedRows > 0;
     }
 
@@ -111,6 +143,8 @@ export class Pago {
             metodo_pago: this.metodo_pago,
             notas: this.notas,
             tipo_abono_nombre: this.tipo_abono_nombre, // New
+            practicante_nombre: this.practicante_nombre, // New
+            deleted_at: this.deleted_at,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

@@ -11,6 +11,7 @@ export class Abono {
         this.fecha_inicio = data.fecha_inicio;
         this.fecha_vencimiento = data.fecha_vencimiento;
         this.estado = data.estado || 'activo';
+        this.cantidad = data.cantidad || 1;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
     }
@@ -24,8 +25,8 @@ export class Abono {
     static async create(data, connection = null) {
         const sql = `
             INSERT INTO Abono (
-                practicante_id, tipo_abono_id, fecha_inicio, fecha_vencimiento, estado
-            ) VALUES (?, ?, ?, ?, ?)
+                practicante_id, tipo_abono_id, fecha_inicio, fecha_vencimiento, estado, cantidad
+            ) VALUES (?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
@@ -33,7 +34,8 @@ export class Abono {
             data.tipo_abono_id,
             data.fecha_inicio,
             data.fecha_vencimiento,
-            data.estado || 'activo'
+            data.estado || 'activo',
+            data.cantidad || 1
         ];
 
         const executor = connection || pool;
@@ -86,11 +88,13 @@ export class Abono {
      * Update abono status
      * @param {number} id - Abono ID
      * @param {string} estado - New status
+     * @param {Object} [connection] - Database connection
      * @returns {Promise<boolean>}
      */
-    static async updateStatus(id, estado) {
+    static async updateStatus(id, estado, connection = null) {
         const sql = 'UPDATE Abono SET estado = ? WHERE id = ?';
-        const [result] = await pool.execute(sql, [estado, id]);
+        const executor = connection || pool;
+        const [result] = await executor.execute(sql, [estado, id]);
         return result.affectedRows > 0;
     }
 
@@ -106,6 +110,7 @@ export class Abono {
             fecha_inicio: this.fecha_inicio,
             fecha_vencimiento: this.fecha_vencimiento,
             estado: this.estado,
+            cantidad: this.cantidad,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

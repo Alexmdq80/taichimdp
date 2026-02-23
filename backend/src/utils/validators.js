@@ -160,8 +160,8 @@ export function validateTipoAbono(data) {
     // Validate duracion_dias
     if (data.duracion_dias !== undefined && data.duracion_dias !== null && data.duracion_dias !== '') {
         const duracion = parseInt(data.duracion_dias, 10);
-        if (isNaN(duracion) || duracion <= 0) {
-            errors.push({ field: 'duracion_dias', message: 'Duración en días must be a positive integer' });
+        if (isNaN(duracion) || duracion < 0) {
+            errors.push({ field: 'duracion_dias', message: 'Duración en días must be a non-negative integer' });
         }
     }
 

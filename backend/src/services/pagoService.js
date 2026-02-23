@@ -12,9 +12,10 @@ export class PagoService {
      * @param {number} tipoAbonoId - ID of the TipoAbono
      * @param {string} [metodoPago='efectivo'] - Payment method
      * @param {string} [notas=null] - Optional notes for the payment
+     * @param {number} [cantidad=1] - Number of units or multipliers
      * @returns {Promise<Pago>}
      */
-    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null) {
+    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null, cantidad = 1) {
         const connection = await beginTransaction();
 
         try {
@@ -42,7 +43,11 @@ export class PagoService {
 
             // 2. Calculate expiration date
             const fechaVencimiento = new Date(fechaInicio);
-            fechaVencimiento.setDate(fechaVencimiento.getDate() + tipoAbono.duracion_dias);
+            
+            // If it's a "unit-based" class (duration 0), expiration is the same day.
+            // If it's a subscription, multiply duration by quantity.
+            const totalDuracion = tipoAbono.duracion_dias * cantidad;
+            fechaVencimiento.setDate(fechaVencimiento.getDate() + totalDuracion);
 
             const fechaInicioStr = fechaInicio.toISOString().split('T')[0];
             const fechaVencimientoStr = fechaVencimiento.toISOString().split('T')[0];
@@ -53,7 +58,8 @@ export class PagoService {
                 tipo_abono_id: tipoAbonoId,
                 fecha_inicio: fechaInicioStr,
                 fecha_vencimiento: fechaVencimientoStr,
-                estado: 'activo'
+                estado: 'activo',
+                cantidad: cantidad
             }, connection);
 
             // 4. Create Pago record linked to the new Abono
@@ -61,7 +67,7 @@ export class PagoService {
                 practicante_id: practicanteId,
                 abono_id: newAbono.id, // Linked to the newly created Abono
                 fecha: fechaPagoStr,
-                monto: tipoAbono.precio,
+                monto: tipoAbono.precio * cantidad,
                 metodo_pago: metodoPago,
                 notas: notas
             };
@@ -77,12 +83,51 @@ export class PagoService {
     }
 
     /**
+     * Get all payments with optional filtering
+     * @param {Object} [filters] - Search filters
+     * @returns {Promise<Pago[]>}
+     */
+    static async getAllPayments(filters = {}) {
+        return await Pago.findAll(filters);
+    }
+
+    /**
      * Get all payments for a specific practicante
      * @param {number} practicanteId - ID of the practicante
      * @returns {Promise<Pago[]>}
      */
     static async getPaymentsByPracticanteId(practicanteId) {
         return await Pago.findByPracticanteId(practicanteId);
+    }
+
+    /**
+     * Delete (soft-delete) a payment and cancel its related abono
+     * @param {number} pagoId - ID of the payment to delete
+     * @returns {Promise<boolean>}
+     */
+    static async deletePayment(pagoId) {
+        const connection = await beginTransaction();
+
+        try {
+            const pago = await Pago.findById(pagoId, connection);
+            if (!pago) {
+                throw new AppError('Payment not found', 404);
+            }
+
+            // 1. Soft delete the payment
+            const deleted = await Pago.delete(pagoId, connection);
+
+            // 2. Mark related abono as 'cancelado' if it exists
+            if (pago.abono_id) {
+                await Abono.updateStatus(pago.abono_id, 'cancelado', connection);
+            }
+
+            await commitTransaction(connection);
+            return deleted;
+        } catch (error) {
+            await rollbackTransaction(connection);
+            throw error;
+        }
     }
 }
 

@@ -59,23 +59,15 @@ export class TipoAbonoForm {
 
 
         <div class="form-group">
-
           <label for="duracion_dias">Duración (días)</label>
-
           <input 
-
             type="number" 
-
             id="duracion_dias" 
-
             name="duracion_dias" 
-
-            value="${tipoAbono.duracion_dias || ''}"
-
-            min="1"
-
+            value="${tipoAbono.duracion_dias !== undefined ? tipoAbono.duracion_dias : ''}"
+            min="0"
           />
-
+          <small class="text-muted">Use 0 para clases o sin vencimiento.</small>
         </div>
 
 
@@ -180,8 +172,13 @@ export class TipoAbonoForm {
     const data = {};
     
     for (const [key, value] of formData.entries()) {
-      if (value.trim() !== '') {
-        data[key] = value.trim();
+      if (value !== null && value.trim() !== '') {
+        // Handle numbers
+        if (key === 'duracion_dias' || key === 'precio') {
+            data[key] = parseFloat(value);
+        } else {
+            data[key] = value.trim();
+        }
       } else {
         data[key] = null;
       }

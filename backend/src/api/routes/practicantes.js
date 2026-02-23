@@ -105,33 +105,52 @@ router.delete('/:id', asyncHandler(async (req, res) => {
  * Record a payment for a practicante's subscription
  */
 router.post('/:id/pagar', asyncHandler(async (req, res) => {
-    const practicanteId = parseInt(req.params.id, 10);
-    if (isNaN(practicanteId)) {
-        throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
-    }
+  const practicanteId = parseInt(req.params.id, 10);
+  if (isNaN(practicanteId)) {
+    throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
+  }
 
-    const { tipo_abono_id, metodo_pago, notas } = req.body; // Destructure new fields
-    const tipoAbonoId = parseInt(tipo_abono_id, 10);
-    if (isNaN(tipoAbonoId) || tipoAbonoId <= 0) {
-        throw new AppError('Invalid Tipo de Abono ID: Must be a positive integer', 400);
-    }
+  const { tipo_abono_id, metodo_pago, notas, cantidad } = req.body; // Destructure new fields
+  const tipoAbonoId = parseInt(tipo_abono_id, 10);
+  if (isNaN(tipoAbonoId) || tipoAbonoId <= 0) {
+    throw new AppError('Invalid Tipo de Abono ID: Must be a positive integer', 400);
+  }
 
-    const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas); // Pass new fields
-        res.status(201).json({ message: 'Payment recorded successfully', data: pago });
-    }));
-    
-    /**
-     * GET /api/practicantes/:id/pagos
-     * Get all payments for a specific practicante
-     */
-    router.get('/:id/pagos', asyncHandler(async (req, res) => {
-        const practicanteId = parseInt(req.params.id, 10);
-        if (isNaN(practicanteId)) {
-            throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
-        }
-    
-        const pagos = await PagoService.getPaymentsByPracticanteId(practicanteId);
-        res.status(200).json({ data: pagos });
-    }));
-    
-    export default router;
+  const cantidadVal = parseInt(cantidad, 10) || 1;
+  if (cantidadVal <= 0) {
+      throw new AppError('Invalid cantidad: Must be a positive integer', 400);
+  }
+
+  const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas, cantidadVal); // Pass new fields
+  res.status(201).json({ message: 'Payment recorded successfully', data: pago });
+}));
+
+/**
+ * GET /api/practicantes/:id/pagos
+ * Get all payments for a specific practicante
+ */
+router.get('/:id/pagos', asyncHandler(async (req, res) => {
+  const practicanteId = parseInt(req.params.id, 10);
+  if (isNaN(practicanteId)) {
+    throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
+  }
+
+  const pagos = await PagoService.getPaymentsByPracticanteId(practicanteId);
+  res.status(200).json({ data: pagos });
+}));
+
+/**
+ * DELETE /api/practicantes/:id/pagos/:pagoId
+ * Delete (soft-delete) a payment
+ */
+router.delete('/:id/pagos/:pagoId', asyncHandler(async (req, res) => {
+  const pagoId = parseInt(req.params.pagoId, 10);
+  if (isNaN(pagoId)) {
+    throw new AppError('Invalid Pago ID: ID must be a valid integer', 400);
+  }
+
+  await PagoService.deletePayment(pagoId);
+  res.status(200).json({ message: 'Payment deleted successfully', data: { id: pagoId } });
+}));
+
+export default router;

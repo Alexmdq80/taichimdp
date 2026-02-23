@@ -7,9 +7,9 @@ export class TipoAbono {
     constructor(data) {
         this.id = data.id || null;
         this.nombre = data.nombre;
-        this.descripcion = data.descripcion || null;
-        this.duracion_dias = data.duracion_dias || null;
-        this.precio = data.precio || null;
+        this.descripcion = data.descripcion !== undefined ? data.descripcion : null;
+        this.duracion_dias = data.duracion_dias !== undefined ? data.duracion_dias : null;
+        this.precio = data.precio !== undefined ? data.precio : null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
@@ -30,9 +30,9 @@ export class TipoAbono {
 
         const values = [
             data.nombre,
-            data.descripcion || null,
-            data.duracion_dias || null,
-            data.precio || null
+            data.descripcion !== undefined ? data.descripcion : null,
+            data.duracion_dias !== undefined ? data.duracion_dias : null,
+            data.precio !== undefined ? data.precio : null
         ];
 
         const [result] = await pool.execute(sql, values);
@@ -92,7 +92,7 @@ export class TipoAbono {
         for (const field of allowedFields) {
             if (data.hasOwnProperty(field)) {
                 updates.push(`${field} = ?`);
-                values.push(data[field] || null);
+                values.push(data[field] !== undefined ? data[field] : null);
             }
         }
 

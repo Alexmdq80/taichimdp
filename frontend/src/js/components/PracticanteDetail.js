@@ -128,7 +128,11 @@ export class PracticanteDetail {
                 `).join('')}
               </select>
             </div>
-            <div id="selected-abono-details" style="margin-top: 1rem;"></div>
+            <div class="form-group">
+                <label for="cantidad-input">Cantidad:</label>
+                <input type="number" id="cantidad-input" name="cantidad" value="1" min="1" required />
+            </div>
+            <div id="selected-abono-details" style="margin-top: 1rem; padding: 10px; background: #f9f9f9; border-radius: 4px;"></div>
             <div class="form-group">
                 <label for="metodo-pago-select">Método de Pago:</label>
                 <select id="metodo-pago-select" name="metodo_pago" required>
@@ -250,6 +254,11 @@ export class PracticanteDetail {
         tipoAbonoSelect.addEventListener('change', this.updateAbonoDetails.bind(this));
     }
 
+    const cantidadInput = this.container.querySelector('#cantidad-input');
+    if (cantidadInput) {
+        cantidadInput.addEventListener('input', this.updateAbonoDetails.bind(this));
+    }
+
     if (paymentForm) {
         paymentForm.addEventListener('submit', this.handlePaymentSubmit.bind(this));
     }
@@ -257,15 +266,30 @@ export class PracticanteDetail {
 
   updateAbonoDetails() {
     const tipoAbonoSelect = this.container.querySelector('#tipo-abono-select');
+    const cantidadInput = this.container.querySelector('#cantidad-input');
     const selectedOption = tipoAbonoSelect.options[tipoAbonoSelect.selectedIndex];
     const detailsDiv = this.container.querySelector('#selected-abono-details');
 
     if (selectedOption && selectedOption.value) {
-        const duracion = selectedOption.getAttribute('data-duracion');
-        const precio = selectedOption.getAttribute('data-precio');
+        const duracion = parseInt(selectedOption.getAttribute('data-duracion'), 10);
+        const precioUnitario = parseFloat(selectedOption.getAttribute('data-precio'));
+        const cantidad = parseInt(cantidadInput.value, 10) || 1;
+        
+        const totalPrecio = precioUnitario * cantidad;
+        
+        let duracionText = '';
+        if (duracion === 0) {
+            duracionText = cantidad === 1 ? '1 Clase' : `${cantidad} Clases`;
+        } else {
+            duracionText = `${duracion * cantidad} días totales (${cantidad} períodos de ${duracion} días)`;
+        }
+
         detailsDiv.innerHTML = `
-            <p><strong>Duración:</strong> ${duracion} días</p>
-            <p><strong>Precio:</strong> $${parseFloat(precio).toFixed(2)}</p>
+            <p><strong>Precio Unitario:</strong> $${precioUnitario.toFixed(2)}</p>
+            <p><strong>Cantidad:</strong> ${cantidad}</p>
+            <p><strong>Duración Total:</strong> ${duracionText}</p>
+            <hr>
+            <p style="font-size: 1.2rem; color: var(--primary-color);"><strong>Total a Pagar: $${totalPrecio.toFixed(2)}</strong></p>
         `;
     } else {
         detailsDiv.innerHTML = '';
@@ -276,11 +300,13 @@ export class PracticanteDetail {
     event.preventDefault();
     const paymentForm = this.container.querySelector('#payment-form');
     const tipoAbonoSelect = paymentForm.querySelector('#tipo-abono-select');
+    const cantidadInput = paymentForm.querySelector('#cantidad-input');
     const metodoPagoSelect = paymentForm.querySelector('#metodo-pago-select');
     const notasTextarea = paymentForm.querySelector('#notas-textarea');
     const errorMessageElement = paymentForm.querySelector('#payment-error-message');
 
     const tipo_abono_id = tipoAbonoSelect.value;
+    const cantidad = cantidadInput.value;
     const metodo_pago = metodoPagoSelect.value;
     const notas = notasTextarea.value;
 
@@ -296,7 +322,12 @@ export class PracticanteDetail {
         await makeRequest(
             `/practicantes/${this.practicante.id}/pagar`,
             'POST',
-            { tipo_abono_id: parseInt(tipo_abono_id, 10), metodo_pago, notas }, // Pass new fields
+            { 
+                tipo_abono_id: parseInt(tipo_abono_id, 10), 
+                cantidad: parseInt(cantidad, 10),
+                metodo_pago, 
+                notas 
+            }, 
             true
         );
         showSuccess('Pago registrado correctamente.', this.container);
@@ -304,6 +335,7 @@ export class PracticanteDetail {
         this.loadPaymentHistory(); // Refresh history
         this.updateAbonoDetails(); // Clear details
         tipoAbonoSelect.value = ''; // Reset select
+        cantidadInput.value = 1; // Reset quantity
     } catch (error) {
         console.error('Error al registrar pago:', error);
         displayApiError(error, errorMessageElement);
@@ -330,6 +362,7 @@ export class PracticanteDetail {
                             <th>Fecha</th>
                             <th>Método Pago</th>
                             <th>Notas</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -341,18 +374,43 @@ export class PracticanteDetail {
                                     <td>${formatDateReadable(pago.fecha)}</td>
                                     <td>${pago.metodo_pago || '-'}</td>
                                     <td>${pago.notas || '-'}</td>
+                                    <td>
+                                        <button class="btn btn-danger btn-sm delete-pago-btn" data-id="${pago.id}">Eliminar</button>
+                                    </td>
                                 </tr>
                             `;
                         }).join('')}
                     </tbody>
                 </table>
             `;
+            // Attach events to delete buttons
+            historyContainer.querySelectorAll('.delete-pago-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const pagoId = e.target.getAttribute('data-id');
+                    this.handleDeletePago(pagoId);
+                });
+            });
         } else {
             historyContainer.innerHTML = '<p class="text-muted">No hay historial de pagos para este practicante.</p>';
         }
     } catch (error) {
         console.error('Error fetching payment history:', error);
         displayApiError(error, historyContainer);
+    }
+  }
+
+  async handleDeletePago(pagoId) {
+    if (!confirm('¿Está seguro de que desea eliminar este pago? Esto también cancelará el abono asociado.')) {
+        return;
+    }
+
+    try {
+        await makeRequest(`/practicantes/${this.practicante.id}/pagos/${pagoId}`, 'DELETE', null, true);
+        showSuccess('Pago eliminado correctamente.', this.container);
+        this.loadPaymentHistory(); // Refresh history
+    } catch (error) {
+        console.error('Error al eliminar pago:', error);
+        alert('Error al eliminar pago: ' + (error.message || 'Error desconocido'));
     }
   }
 

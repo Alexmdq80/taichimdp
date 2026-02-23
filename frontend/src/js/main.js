@@ -7,6 +7,7 @@ import PracticantesPage from './pages/practicantes.js';
 import LoginPage from './pages/login.js';
 import RegisterPage from './pages/register.js';
 import TiposAbonoPage from './pages/tiposAbono.js'; // Import the new page component
+import PagosPage from './pages/pagos.js'; // Import PagosPage
 
 // Function to check if user is authenticated
 function isAuthenticated() {
@@ -36,6 +37,11 @@ function updateNavigation() {
       tiposAbonoLink.href = '/tipos-abono';
       tiposAbonoLink.textContent = 'Tipos de Abono';
       navLinksDiv.appendChild(tiposAbonoLink);
+
+      const pagosLink = document.createElement('a'); // New link for Pagos
+      pagosLink.href = '/pagos';
+      pagosLink.textContent = 'Pagos';
+      navLinksDiv.appendChild(pagosLink);
 
       const logoutLink = document.createElement('a');
       logoutLink.href = '#'; // Prevent default navigation
@@ -135,6 +141,19 @@ route('/tipos-abono', () => { // New route for Tipos de Abono
   const mainContent = document.querySelector('#main-content');
   if (mainContent) {
     const page = new TiposAbonoPage(mainContent); // Use the new page component
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/pagos', () => { // New route for Pagos
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new PagosPage(mainContent); // Use the new page component
     page.render();
   }
   updateNavigation(); // Update navigation after routing

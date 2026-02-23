@@ -139,6 +139,60 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Migración 004 completada exitosamente!" -ForegroundColor Green
 
+# Ejecutar migración 005
+Write-Host "Ejecutando script de migración 005_pago_soft_delete.sql..." -ForegroundColor Yellow
+$migrationFile005 = Join-Path $PSScriptRoot "migrations\005_pago_soft_delete.sql"
+
+if (-not (Test-Path $migrationFile005)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile005" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile005 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 005 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 005 completada exitosamente!" -ForegroundColor Green
+
+# Ejecutar migración 006
+Write-Host "Ejecutando script de migración 006_allow_zero_duration_abono.sql..." -ForegroundColor Yellow
+$migrationFile006 = Join-Path $PSScriptRoot "migrations\006_allow_zero_duration_abono.sql"
+
+if (-not (Test-Path $migrationFile006)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile006" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile006 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 006 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 006 completada exitosamente!" -ForegroundColor Green
+
+# Ejecutar migración 007
+Write-Host "Ejecutando script de migración 007_add_cantidad_to_abono.sql..." -ForegroundColor Yellow
+$migrationFile007 = Join-Path $PSScriptRoot "migrations\007_add_cantidad_to_abono.sql"
+
+if (-not (Test-Path $migrationFile007)) {
+    Write-Host "ERROR: Archivo de migración no encontrado: $migrationFile007" -ForegroundColor Red
+    exit 1
+}
+
+Get-Content $migrationFile007 | & mysql $mysqlArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: La migración 007 falló." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Migración 007 completada exitosamente!" -ForegroundColor Green
+
 # Verificar tablas creadas
 Write-Host "`nVerificando tablas creadas..." -ForegroundColor Yellow
 $mysqlArgs = @("-u", $dbUser)

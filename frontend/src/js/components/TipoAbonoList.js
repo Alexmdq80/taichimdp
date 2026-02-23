@@ -77,7 +77,7 @@ export class TipoAbonoList {
             <tr>
               <td>${this.escapeHtml(tipoAbono.nombre)}</td>
               <td>${tipoAbono.descripcion ? this.escapeHtml(tipoAbono.descripcion) : '-'}</td>
-              <td>${tipoAbono.duracion_dias ? tipoAbono.duracion_dias + ' días' : '-'}</td>
+              <td>${tipoAbono.duracion_dias !== 0 ? tipoAbono.duracion_dias + ' días' : '<em>Clase</em>'}</td>
               <td>${tipoAbono.precio ? '$' + parseFloat(tipoAbono.precio).toFixed(2) : '-'}</td>
               <td>
                 <button 

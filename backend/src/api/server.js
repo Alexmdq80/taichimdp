@@ -29,11 +29,13 @@ import apiRoutes from './routes/index.js';
 import practicantesRoutes from './routes/practicantes.js';
 import authRoutes from './routes/auth.js'; // Import auth routes
 import tiposAbonoRoutes from './routes/tiposAbono.js'; // Import tiposAbono routes
+import pagosRoutes from './routes/pagos.js'; // Import pagos routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/tipos-abono', tiposAbonoRoutes); // Mount tiposAbono routes
+app.use('/api/pagos', pagosRoutes); // Mount pagos routes
 
 // 404 handler
 app.use((req, res) => {
