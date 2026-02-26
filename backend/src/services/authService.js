@@ -1,11 +1,6 @@
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/errors.js'; // Changed to AppError
-
-dotenv.config();
-
-const JWT_SECRET = process.env.JWT_SECRET;
 
 export const registerUser = async (email, password) => {
     const existingUser = await User.findByEmail(email);
@@ -30,6 +25,11 @@ export const loginUser = async (email, password) => {
         throw new AppError('Invalid credentials', 401); // Changed to AppError
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new AppError('JWT_SECRET is not defined in environment variables', 500);
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, secret, { expiresIn: '1h' });
     return { token, userId: user.id, email: user.email };
 };

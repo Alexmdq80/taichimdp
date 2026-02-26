@@ -16,10 +16,19 @@ export class TipoAbonoForm {
       tipoAbono: options.tipoAbono || null
     };
     this.isEditing = !!this.options.tipoAbono;
+    this.lugares = [];
   }
 
-  render() {
+  async render() {
     const tipoAbono = this.options.tipoAbono || {};
+    
+    // Fetch lugares
+    try {
+        const response = await makeRequest('/lugares', 'GET', null, true);
+        this.lugares = response.data || [];
+    } catch (error) {
+        console.error('Error fetching lugares:', error);
+    }
     
     this.container.innerHTML = `
       <form id="tipo-abono-form" class="card">
@@ -105,6 +114,16 @@ export class TipoAbonoForm {
           </select>
         </div>
 
+        <div class="form-group">
+          <label for="lugar_id">Lugar Predeterminado</label>
+          <select id="lugar_id" name="lugar_id">
+            <option value="">-- Seleccione un lugar (Opcional) --</option>
+            ${this.lugares.map(l => `
+                <option value="${l.id}" ${tipoAbono.lugar_id == l.id ? 'selected' : ''}>${l.nombre}</option>
+            `).join('')}
+          </select>
+        </div>
+
         <div class="flex gap-2">
 
           <button type="submit" class="btn">${this.isEditing ? 'Actualizar' : 'Guardar'}</button>          <button type="button" class="btn btn-secondary" id="cancel-btn">Cancelar</button>
@@ -183,7 +202,7 @@ export class TipoAbonoForm {
     for (const [key, value] of formData.entries()) {
       if (value !== null && value.trim() !== '') {
         // Handle numbers
-        if (key === 'duracion_dias' || key === 'precio') {
+        if (key === 'duracion_dias' || key === 'precio' || key === 'lugar_id') {
             data[key] = parseFloat(value);
         } else {
             data[key] = value.trim();

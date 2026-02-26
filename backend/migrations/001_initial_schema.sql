@@ -1,9 +1,6 @@
 -- Initial database schema for Tai Chi Management System
 -- Run this script to create the database and all tables
 
-CREATE DATABASE IF NOT EXISTS tai_chi_management;
-USE tai_chi_management;
-
 -- Table: Practicante
 CREATE TABLE IF NOT EXISTS Practicante (
   id INT AUTO_INCREMENT PRIMARY KEY,

@@ -67,7 +67,7 @@ export class TipoAbonoList {
           <tr>
             <th>Nombre</th>
             <th>Categoría</th>
-            <th>Descripción</th>
+            <th>Lugar</th>
             <th>Duración (Días)</th>
             <th>Precio</th>
             <th>Acciones</th>
@@ -78,7 +78,7 @@ export class TipoAbonoList {
             <tr>
               <td>${this.escapeHtml(tipoAbono.nombre)}</td>
               <td><span class="badge ${tipoAbono.categoria === 'cuota_club' ? 'badge-info' : ''}">${this.formatCategoria(tipoAbono.categoria)}</span></td>
-              <td>${tipoAbono.descripcion ? this.escapeHtml(tipoAbono.descripcion) : '-'}</td>
+              <td>${this.escapeHtml(tipoAbono.lugar_nombre || '-')}</td>
               <td>${tipoAbono.duracion_dias !== 0 ? tipoAbono.duracion_dias + ' días' : '<em>Clase</em>'}</td>
               <td>${tipoAbono.precio ? '$' + parseFloat(tipoAbono.precio).toFixed(2) : '-'}</td>
               <td>

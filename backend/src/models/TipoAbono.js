@@ -11,6 +11,8 @@ export class TipoAbono {
         this.duracion_dias = data.duracion_dias !== undefined ? data.duracion_dias : null;
         this.precio = data.precio !== undefined ? data.precio : null;
         this.categoria = data.categoria || 'clase';
+        this.lugar_id = data.lugar_id || null;
+        this.lugar_nombre = data.lugar_nombre || null; // From join
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
@@ -25,8 +27,8 @@ export class TipoAbono {
     static async create(data, userId = null) {
         const sql = `
             INSERT INTO TipoAbono (
-                nombre, descripcion, duracion_dias, precio, categoria
-            ) VALUES (?, ?, ?, ?, ?)
+                nombre, descripcion, duracion_dias, precio, categoria, lugar_id
+            ) VALUES (?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
@@ -34,7 +36,8 @@ export class TipoAbono {
             data.descripcion !== undefined ? data.descripcion : null,
             data.duracion_dias !== undefined ? data.duracion_dias : null,
             data.precio !== undefined ? data.precio : null,
-            data.categoria || 'clase'
+            data.categoria || 'clase',
+            data.lugar_id || null
         ];
 
         const [result] = await pool.execute(sql, values);
@@ -54,7 +57,12 @@ export class TipoAbono {
      * @returns {Promise<TipoAbono|null>}
      */
     static async findById(id, connection = null) {
-        const sql = 'SELECT * FROM TipoAbono WHERE id = ? AND deleted_at IS NULL';
+        const sql = `
+            SELECT ta.*, l.nombre as lugar_nombre
+            FROM TipoAbono ta
+            LEFT JOIN Lugar l ON ta.lugar_id = l.id
+            WHERE ta.id = ? AND ta.deleted_at IS NULL
+        `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
 
@@ -70,7 +78,13 @@ export class TipoAbono {
      * @returns {Promise<TipoAbono[]>}
      */
     static async findAll() {
-        const sql = 'SELECT * FROM TipoAbono WHERE deleted_at IS NULL ORDER BY nombre ASC';
+        const sql = `
+            SELECT ta.*, l.nombre as lugar_nombre
+            FROM TipoAbono ta
+            LEFT JOIN Lugar l ON ta.lugar_id = l.id
+            WHERE ta.deleted_at IS NULL
+            ORDER BY ta.nombre ASC
+        `;
         const [rows] = await pool.execute(sql);
         return rows.map(row => new TipoAbono(row));
     }
@@ -86,7 +100,7 @@ export class TipoAbono {
         const currentData = await this.findById(id);
         if (!currentData) return null;
 
-        const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'categoria'];
+        const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'categoria', 'lugar_id'];
 
         const updates = [];
         const values = [];
@@ -202,6 +216,8 @@ export class TipoAbono {
             duracion_dias: this.duracion_dias,
             precio: this.precio,
             categoria: this.categoria,
+            lugar_id: this.lugar_id,
+            lugar_nombre: this.lugar_nombre,
             created_at: this.created_at,
             updated_at: this.updated_at,
             deleted_at: this.deleted_at

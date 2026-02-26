@@ -1,7 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { testConnection } from '../config/database.js';
 import { errorHandler } from '../utils/errors.js';
+
+// Initialize environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,12 +34,14 @@ import practicantesRoutes from './routes/practicantes.js';
 import authRoutes from './routes/auth.js'; // Import auth routes
 import tiposAbonoRoutes from './routes/tiposAbono.js'; // Import tiposAbono routes
 import pagosRoutes from './routes/pagos.js'; // Import pagos routes
+import lugaresRoutes from './routes/lugares.js'; // Import lugares routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/tipos-abono', tiposAbonoRoutes); // Mount tiposAbono routes
 app.use('/api/pagos', pagosRoutes); // Mount pagos routes
+app.use('/api/lugares', lugaresRoutes); // Mount lugares routes
 
 // 404 handler
 app.use((req, res) => {

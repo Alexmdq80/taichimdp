@@ -148,9 +148,10 @@ export class PagosPage {
             <th>Categoría</th>
             <th>Tipo Abono</th>
             <th>Monto</th>
-            <th>Fecha</th>
-            <th>Método Pago</th>
-            <th>Notas</th>
+            <th>Fecha Pago</th>
+            <th>Vencimiento</th>
+            <th>Lugar</th>
+            <th>Método</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -163,13 +164,12 @@ export class PagosPage {
                 </a>
               </td>
               <td><span class="badge ${pago.categoria === 'cuota_club' ? 'badge-info' : ''}">${this.formatCategoria(pago.categoria)}</span></td>
-              <td>${this.escapeHtml(pago.tipo_abono_nombre || 'Desconocido')}</td>
+              <td>${this.escapeHtml(pago.tipo_abono_nombre || 'Desconocido')}${pago.mes_abono ? ' (' + pago.mes_abono + ')' : ''}</td>
               <td>$${parseFloat(pago.monto).toFixed(2)}</td>
               <td>${formatDateReadable(pago.fecha)}</td>
+              <td>${pago.fecha_vencimiento ? formatDateReadable(pago.fecha_vencimiento) : '-'}</td>
+              <td>${this.escapeHtml(pago.lugar_nombre || '-')}</td>
               <td>${pago.metodo_pago || '-'}</td>
-              <td title="${this.escapeHtml(pago.notas || '')}">
-                ${this.truncateText(pago.notas || '-', 30)}
-              </td>
               <td>
                 <button class="btn btn-danger btn-sm delete-pago-btn" data-id="${pago.id}">Eliminar</button>
               </td>

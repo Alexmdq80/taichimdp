@@ -10,6 +10,9 @@ export class Abono {
         this.tipo_abono_id = data.tipo_abono_id;
         this.fecha_inicio = data.fecha_inicio;
         this.fecha_vencimiento = data.fecha_vencimiento;
+        this.mes_abono = data.mes_abono || null;
+        this.lugar_id = data.lugar_id || null;
+        this.lugar_nombre = data.lugar_nombre || null; // From join
         this.estado = data.estado || 'activo';
         this.cantidad = data.cantidad || 1;
         this.created_at = data.created_at || null;
@@ -25,8 +28,8 @@ export class Abono {
     static async create(data, connection = null) {
         const sql = `
             INSERT INTO Abono (
-                practicante_id, tipo_abono_id, fecha_inicio, fecha_vencimiento, estado, cantidad
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                practicante_id, tipo_abono_id, fecha_inicio, fecha_vencimiento, mes_abono, lugar_id, estado, cantidad
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
@@ -34,6 +37,8 @@ export class Abono {
             data.tipo_abono_id,
             data.fecha_inicio,
             data.fecha_vencimiento,
+            data.mes_abono || null,
+            data.lugar_id || null,
             data.estado || 'activo',
             data.cantidad || 1
         ];
@@ -50,7 +55,12 @@ export class Abono {
      * @returns {Promise<Abono|null>}
      */
     static async findById(id, connection = null) {
-        const sql = 'SELECT * FROM Abono WHERE id = ?';
+        const sql = `
+            SELECT a.*, l.nombre as lugar_nombre
+            FROM Abono a
+            LEFT JOIN Lugar l ON a.lugar_id = l.id
+            WHERE a.id = ?
+        `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
 
@@ -69,10 +79,12 @@ export class Abono {
      */
     static async findActiveByPracticanteId(practicanteId, connection = null) {
         const sql = `
-            SELECT * FROM Abono 
-            WHERE practicante_id = ? AND estado = 'activo' 
-            AND fecha_vencimiento >= CURDATE()
-            ORDER BY fecha_vencimiento DESC LIMIT 1
+            SELECT a.*, l.nombre as lugar_nombre
+            FROM Abono a
+            LEFT JOIN Lugar l ON a.lugar_id = l.id
+            WHERE a.practicante_id = ? AND a.estado = 'activo' 
+            AND a.fecha_vencimiento >= CURDATE()
+            ORDER BY a.fecha_vencimiento DESC LIMIT 1
         `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [practicanteId]);
@@ -109,6 +121,9 @@ export class Abono {
             tipo_abono_id: this.tipo_abono_id,
             fecha_inicio: this.fecha_inicio,
             fecha_vencimiento: this.fecha_vencimiento,
+            mes_abono: this.mes_abono,
+            lugar_id: this.lugar_id,
+            lugar_nombre: this.lugar_nombre,
             estado: this.estado,
             cantidad: this.cantidad,
             created_at: this.created_at,

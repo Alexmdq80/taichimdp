@@ -15,6 +15,9 @@ export class Pago {
         this.tipo_abono_nombre = data.tipo_abono_nombre || null; // New field from join
         this.practicante_nombre = data.practicante_nombre || null; // New field from join
         this.categoria = data.categoria || null; // New field from join
+        this.mes_abono = data.mes_abono || null; // New field from join
+        this.lugar_nombre = data.lugar_nombre || null; // New field from join
+        this.fecha_vencimiento = data.fecha_vencimiento || null; // New field from join
         this.deleted_at = data.deleted_at || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
@@ -54,11 +57,13 @@ export class Pago {
      */
     static async findAll(filters = {}) {
         let sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre
+            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
+                   a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
+            LEFT JOIN Lugar l ON a.lugar_id = l.id
             WHERE p.deleted_at IS NULL
         `;
         const params = [];
@@ -87,11 +92,13 @@ export class Pago {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre
+            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre,
+                   a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
+            LEFT JOIN Lugar l ON a.lugar_id = l.id
             WHERE p.id = ? AND p.deleted_at IS NULL
         `;
         const executor = connection || pool;
@@ -111,10 +118,11 @@ export class Pago {
      */
     static async findByPracticanteId(practicanteId) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre 
+            SELECT p.*, ta.nombre as tipo_abono_nombre, a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            LEFT JOIN Lugar l ON a.lugar_id = l.id
             WHERE p.practicante_id = ? AND p.deleted_at IS NULL
             ORDER BY p.fecha DESC
         `;

@@ -110,7 +110,7 @@ router.post('/:id/pagar', asyncHandler(async (req, res) => {
     throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
   }
 
-  const { tipo_abono_id, metodo_pago, notas, cantidad } = req.body; // Destructure new fields
+  const { tipo_abono_id, metodo_pago, notas, cantidad, mes_abono, fecha_vencimiento, fecha_pago, lugar_id } = req.body; // Destructure new fields
   const tipoAbonoId = parseInt(tipo_abono_id, 10);
   if (isNaN(tipoAbonoId) || tipoAbonoId <= 0) {
     throw new AppError('Invalid Tipo de Abono ID: Must be a positive integer', 400);
@@ -121,7 +121,14 @@ router.post('/:id/pagar', asyncHandler(async (req, res) => {
       throw new AppError('Invalid cantidad: Must be a positive integer', 400);
   }
 
-  const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas, cantidadVal); // Pass new fields
+  const extraData = {
+    mes_abono: mes_abono || null,
+    fecha_vencimiento: fecha_vencimiento || null,
+    fecha_pago: fecha_pago || null,
+    lugar_id: lugar_id ? parseInt(lugar_id, 10) : null
+  };
+
+  const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas, cantidadVal, extraData); // Pass extraData
   res.status(201).json({ message: 'Payment recorded successfully', data: pago });
 }));
 

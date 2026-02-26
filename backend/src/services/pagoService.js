@@ -13,9 +13,10 @@ export class PagoService {
      * @param {string} [metodoPago='efectivo'] - Payment method
      * @param {string} [notas=null] - Optional notes for the payment
      * @param {number} [cantidad=1] - Number of units or multipliers
+     * @param {Object} [extraData={}] - Extra data (mes_abono, fecha_vencimiento)
      * @returns {Promise<Pago>}
      */
-    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null, cantidad = 1) {
+    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null, cantidad = 1, extraData = {}) {
         const connection = await beginTransaction();
 
         try {
@@ -30,7 +31,7 @@ export class PagoService {
             }
 
             const today = new Date();
-            const fechaPagoStr = today.toISOString().split('T')[0];
+            const fechaPagoStr = extraData.fecha_pago || today.toISOString().split('T')[0];
 
             // 1. Determine start date (today or day after existing active abono ends)
             const activeAbono = await Abono.findActiveByPracticanteId(practicanteId, connection);
@@ -42,12 +43,17 @@ export class PagoService {
             }
 
             // 2. Calculate expiration date
-            const fechaVencimiento = new Date(fechaInicio);
+            let fechaVencimiento;
             
-            // If it's a "unit-based" class (duration 0), expiration is the same day.
-            // If it's a subscription, multiply duration by quantity.
-            const totalDuracion = tipoAbono.duracion_dias * cantidad;
-            fechaVencimiento.setDate(fechaVencimiento.getDate() + totalDuracion);
+            if (extraData.fecha_vencimiento) {
+                fechaVencimiento = new Date(extraData.fecha_vencimiento);
+            } else {
+                fechaVencimiento = new Date(fechaInicio);
+                // If it's a "unit-based" class (duration 0), expiration is the same day.
+                // If it's a subscription, multiply duration by quantity.
+                const totalDuracion = tipoAbono.duracion_dias * cantidad;
+                fechaVencimiento.setDate(fechaVencimiento.getDate() + totalDuracion);
+            }
 
             const fechaInicioStr = fechaInicio.toISOString().split('T')[0];
             const fechaVencimientoStr = fechaVencimiento.toISOString().split('T')[0];
@@ -58,6 +64,8 @@ export class PagoService {
                 tipo_abono_id: tipoAbonoId,
                 fecha_inicio: fechaInicioStr,
                 fecha_vencimiento: fechaVencimientoStr,
+                mes_abono: extraData.mes_abono || null,
+                lugar_id: extraData.lugar_id || tipoAbono.lugar_id,
                 estado: 'activo',
                 cantidad: cantidad
             }, connection);
