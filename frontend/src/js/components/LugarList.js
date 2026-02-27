@@ -32,16 +32,42 @@ export class LugarList {
             <tr>
               <th>Nombre</th>
               <th>Dirección</th>
+              <th>Cuota Social</th>
+              <th>Tarifa (Costo)</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="lugares-table-body">
             ${this.lugares.map(l => `
-              <tr>
-                <td>${this.escapeHtml(l.nombre)}</td>
-                <td>${this.escapeHtml(l.direccion || '-')}</td>
-                <td><span class="badge ${l.activo ? 'badge-success' : 'badge-danger'}">${l.activo ? 'Activo' : 'Inactivo'}</span></td>
+              <tr class="${l.parent_id ? 'sub-lugar' : 'main-lugar'}">
+                <td style="padding-left: ${l.parent_id ? '2rem' : '0.5rem'};">
+                  ${l.parent_id ? '↳ ' : ''} 
+                  <strong>${this.escapeHtml(l.nombre)}</strong>
+                  ${l.parent_nombre ? `<br><small class="text-muted">(${l.parent_nombre})</small>` : ''}
+                </td>
+                <td>
+                  ${this.escapeHtml(l.direccion_mostrada || '-')}
+                  ${!l.direccion && l.parent_id && l.parent_direccion ? '<br><small class="text-muted">(Heredada)</small>' : ''}
+                </td>
+                <td>
+                  ${l.cobra_cuota_social 
+                    ? `<span class="badge badge-info">Sí</span> <br> 
+                       <small>Gen: $${parseFloat(l.cuota_social_general).toFixed(2)}</small><br>
+                       <small>Desc: $${parseFloat(l.cuota_social_descuento).toFixed(2)}</small>` 
+                    : '<span class="badge badge-secondary">No</span>'}
+                </td>
+                <td>
+                  ${l.parent_id 
+                    ? `$${parseFloat(l.costo_tarifa).toFixed(2)} <small class="text-muted">/ ${l.tipo_tarifa === 'por_hora' ? 'hora' : 'mes'}</small>`
+                    : '<span class="text-muted">-</span>'}
+                </td>
+                <td>
+                    <span class="badge ${l.activo_efectivo ? 'badge-success' : 'badge-danger'}">
+                        ${l.activo_efectivo ? 'Activo' : 'Inactivo'}
+                    </span>
+                    ${!l.activo_efectivo && l.activo && l.parent_id && !l.parent_activo ? '<br><small class="text-muted">(Inactiva por Sede)</small>' : ''}
+                </td>
                 <td>
                   <button class="btn btn-secondary btn-sm edit-btn" data-id="${l.id}">Editar</button>
                   <button class="btn btn-danger btn-sm delete-btn" data-id="${l.id}">Eliminar</button>
