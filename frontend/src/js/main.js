@@ -9,6 +9,7 @@ import RegisterPage from './pages/register.js';
 import TiposAbonoPage from './pages/tiposAbono.js'; // Import the new page component
 import PagosPage from './pages/pagos.js'; // Import PagosPage
 import LugaresPage from './pages/lugares.js'; // Import LugaresPage
+import ActividadesPage from './pages/actividades.js'; // Import ActividadesPage
 
 // Function to check if user is authenticated
 function isAuthenticated() {
@@ -48,6 +49,11 @@ function updateNavigation() {
       pagosLink.href = '/pagos';
       pagosLink.textContent = 'Pagos';
       navLinksDiv.appendChild(pagosLink);
+
+      const actividadesLink = document.createElement('a'); // New link for Actividades
+      actividadesLink.href = '/actividades';
+      actividadesLink.textContent = 'Actividades';
+      navLinksDiv.appendChild(actividadesLink);
 
       const logoutLink = document.createElement('a');
       logoutLink.href = '#'; // Prevent default navigation
@@ -173,6 +179,19 @@ route('/lugares', () => { // New route for Lugares
   const mainContent = document.querySelector('#main-content');
   if (mainContent) {
     const page = new LugaresPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/actividades', () => { // New route for Actividades
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new ActividadesPage(mainContent);
     page.render();
   }
   updateNavigation(); // Update navigation after routing

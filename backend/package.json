@@ -1,7 +1,7 @@
 {
     "name": "tai-chi-management-backend",
     "version": "1.0.0",
-    "description": "Backend API for Tai Chi Chuan Management System",
+    "description": "Backend API for Sistema de Gestión de Clases",
     "main": "src/api/server.js",
     "type": "module",
     "scripts": {

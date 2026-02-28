@@ -17,15 +17,17 @@ export class Abono {
         this.cantidad = data.cantidad || 1;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
+        this.deleted_at = data.deleted_at || null;
     }
 
     /**
-     * Create a new abono
+     * Create a new abono and record history
      * @param {Object} data - Abono data
      * @param {Object} [connection] - Database connection for transactions
+     * @param {number} [userId] - ID of the user creating it
      * @returns {Promise<Abono>}
      */
-    static async create(data, connection = null) {
+    static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Abono (
                 practicante_id, tipo_abono_id, fecha_inicio, fecha_vencimiento, mes_abono, lugar_id, estado, cantidad
@@ -45,11 +47,17 @@ export class Abono {
 
         const executor = connection || pool;
         const [result] = await executor.execute(sql, values);
-        return await this.findById(result.insertId, connection);
+        const newAbono = await this.findById(result.insertId, executor);
+
+        if (newAbono) {
+            await this.recordHistory(newAbono.id, 'CREATE', null, newAbono.toJSON(), userId, executor);
+        }
+
+        return newAbono;
     }
 
     /**
-     * Find abono by ID
+     * Find abono by ID (only non-deleted)
      * @param {number} id - Abono ID
      * @param {Object} [connection] - Database connection
      * @returns {Promise<Abono|null>}
@@ -59,7 +67,7 @@ export class Abono {
             SELECT a.*, l.nombre as lugar_nombre
             FROM Abono a
             LEFT JOIN Lugar l ON a.lugar_id = l.id
-            WHERE a.id = ?
+            WHERE a.id = ? AND a.deleted_at IS NULL
         `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
@@ -84,6 +92,7 @@ export class Abono {
             LEFT JOIN Lugar l ON a.lugar_id = l.id
             WHERE a.practicante_id = ? AND a.estado = 'activo' 
             AND a.fecha_vencimiento >= CURDATE()
+            AND a.deleted_at IS NULL
             ORDER BY a.fecha_vencimiento DESC LIMIT 1
         `;
         const executor = connection || pool;
@@ -97,17 +106,99 @@ export class Abono {
     }
 
     /**
-     * Update abono status
+     * Update abono status and record history
      * @param {number} id - Abono ID
      * @param {string} estado - New status
      * @param {Object} [connection] - Database connection
+     * @param {number} [userId] - ID of the user updating it
      * @returns {Promise<boolean>}
      */
-    static async updateStatus(id, estado, connection = null) {
-        const sql = 'UPDATE Abono SET estado = ? WHERE id = ?';
+    static async updateStatus(id, estado, connection = null, userId = null) {
         const executor = connection || pool;
+        const currentData = await this.findById(id, executor);
+        if (!currentData) return false;
+
+        const sql = 'UPDATE Abono SET estado = ? WHERE id = ? AND deleted_at IS NULL';
         const [result] = await executor.execute(sql, [estado, id]);
-        return result.affectedRows > 0;
+
+        if (result.affectedRows > 0) {
+            const updatedAbono = await this.findById(id, executor);
+            await this.recordHistory(id, 'UPDATE', currentData.toJSON(), updatedAbono.toJSON(), userId, executor);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Soft delete abono and record history
+     * @param {number} id - Abono ID
+     * @param {Object} [connection] - Database connection
+     * @param {number} [userId] - User ID
+     * @returns {Promise<boolean>}
+     */
+    static async delete(id, connection = null, userId = null) {
+        const executor = connection || pool;
+        const currentData = await this.findById(id, executor);
+        if (!currentData) return false;
+
+        const sql = 'UPDATE Abono SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL';
+        const [result] = await executor.execute(sql, [id]);
+
+        if (result.affectedRows > 0) {
+            await this.recordHistory(id, 'DELETE', currentData.toJSON(), null, userId, executor);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Record modification history
+     * @param {number} abonoId - Abono ID
+     * @param {string} action - Action performed (CREATE, UPDATE, DELETE)
+     * @param {Object|null} oldData - Data before change
+     * @param {Object|null} newData - Data after change
+     * @param {number|null} userId - ID of the user who performed the action
+     * @param {Object} [connection] - Database connection
+     * @returns {Promise<void>}
+     */
+    static async recordHistory(abonoId, action, oldData, newData, userId, connection = null) {
+        const sql = `
+            INSERT INTO HistorialAbono (
+                abono_id, accion, datos_anteriores, datos_nuevos, usuario_id
+            ) VALUES (?, ?, ?, ?, ?)
+        `;
+
+        const values = [
+            abonoId,
+            action,
+            oldData ? JSON.stringify(oldData) : null,
+            newData ? JSON.stringify(newData) : null,
+            userId
+        ];
+
+        const executor = connection || pool;
+        await executor.execute(sql, values);
+    }
+
+    /**
+     * Get history of an abono
+     * @param {number} id - Abono ID
+     * @returns {Promise<Array>}
+     */
+    static async getHistory(id) {
+        const sql = `
+            SELECT h.*, u.email as usuario_email
+            FROM HistorialAbono h
+            LEFT JOIN User u ON h.usuario_id = u.id
+            WHERE h.abono_id = ?
+            ORDER BY h.fecha DESC
+        `;
+        const [rows] = await pool.execute(sql, [id]);
+        return rows.map(row => ({
+            ...row,
+            datos_anteriores: typeof row.datos_anteriores === 'string' ? JSON.parse(row.datos_anteriores) : row.datos_anteriores,
+            datos_nuevos: typeof row.datos_nuevos === 'string' ? JSON.parse(row.datos_nuevos) : row.datos_nuevos
+        }));
     }
 
     /**
@@ -127,7 +218,8 @@ export class Abono {
             estado: this.estado,
             cantidad: this.cantidad,
             created_at: this.created_at,
-            updated_at: this.updated_at
+            updated_at: this.updated_at,
+            deleted_at: this.deleted_at
         };
     }
 }

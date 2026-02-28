@@ -24,12 +24,13 @@ export class Pago {
     }
 
     /**
-     * Create a new payment
+     * Create a new payment and record history
      * @param {Object} data - Pago data
      * @param {Object} [connection] - Database connection for transactions
+     * @param {number} [userId] - User ID
      * @returns {Promise<Pago>}
      */
-    static async create(data, connection = null) {
+    static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Pago (
                 practicante_id, abono_id, fecha, monto, metodo_pago, notas
@@ -47,7 +48,13 @@ export class Pago {
 
         const executor = connection || pool;
         const [result] = await executor.execute(sql, values);
-        return await this.findById(result.insertId, connection);
+        const newPago = await this.findById(result.insertId, connection);
+
+        if (newPago) {
+            await this.recordHistory(newPago.id, 'CREATE', null, newPago.toJSON(), userId, executor);
+        }
+
+        return newPago;
     }
 
     /**
@@ -131,16 +138,75 @@ export class Pago {
     }
 
     /**
-     * Delete payment (Soft Delete)
+     * Delete payment (Soft Delete) and record history
      * @param {number} id - Pago ID
      * @param {Object} [connection] - Database connection
+     * @param {number} [userId] - User ID
      * @returns {Promise<boolean>}
      */
-    static async delete(id, connection = null) {
-        const sql = 'UPDATE Pago SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?';
+    static async delete(id, connection = null, userId = null) {
         const executor = connection || pool;
+        const currentData = await this.findById(id, executor);
+        if (!currentData) return false;
+
+        const sql = 'UPDATE Pago SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?';
         const [result] = await executor.execute(sql, [id]);
-        return result.affectedRows > 0;
+        
+        if (result.affectedRows > 0) {
+            await this.recordHistory(id, 'DELETE', currentData.toJSON(), null, userId, executor);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Record modification history
+     * @param {number} pagoId - Pago ID
+     * @param {string} action - Action performed (CREATE, UPDATE, DELETE)
+     * @param {Object|null} oldData - Data before change
+     * @param {Object|null} newData - Data after change
+     * @param {number|null} userId - ID of the user who performed the action
+     * @param {Object} [connection] - Database connection
+     * @returns {Promise<void>}
+     */
+    static async recordHistory(pagoId, action, oldData, newData, userId, connection = null) {
+        const sql = `
+            INSERT INTO HistorialPago (
+                pago_id, accion, datos_anteriores, datos_nuevos, usuario_id
+            ) VALUES (?, ?, ?, ?, ?)
+        `;
+
+        const values = [
+            pagoId,
+            action,
+            oldData ? JSON.stringify(oldData) : null,
+            newData ? JSON.stringify(newData) : null,
+            userId
+        ];
+
+        const executor = connection || pool;
+        await executor.execute(sql, values);
+    }
+
+    /**
+     * Get history of a payment
+     * @param {number} id - Pago ID
+     * @returns {Promise<Array>}
+     */
+    static async getHistory(id) {
+        const sql = `
+            SELECT h.*, u.email as usuario_email
+            FROM HistorialPago h
+            LEFT JOIN User u ON h.usuario_id = u.id
+            WHERE h.pago_id = ?
+            ORDER BY h.fecha DESC
+        `;
+        const [rows] = await pool.execute(sql, [id]);
+        return rows.map(row => ({
+            ...row,
+            datos_anteriores: typeof row.datos_anteriores === 'string' ? JSON.parse(row.datos_anteriores) : row.datos_anteriores,
+            datos_nuevos: typeof row.datos_nuevos === 'string' ? JSON.parse(row.datos_nuevos) : row.datos_nuevos
+        }));
     }
 
     /**

@@ -8,10 +8,15 @@ export const registerUser = async (email, password) => {
         throw new AppError('User with that email already exists', 409); // Changed to AppError
     }
 
-    const user = await User.create({ email, password });
+    // In a self-registration flow, creatorId is null
+    const user = await User.create({ email, password }, null);
+    
     // For security, do not return the password hash
-    const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    // The user object is an instance of User, so we can call toJSON if available or destructure
+    return user.toJSON ? user.toJSON() : (() => {
+        const { password: _, ...rest } = user;
+        return rest;
+    })();
 };
 
 export const loginUser = async (email, password) => {

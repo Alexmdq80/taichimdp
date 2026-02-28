@@ -1,9 +1,9 @@
-import { Pago } from '../models/Pago.js';
-import { Practicante } from '../models/Practicante.js';
-import { TipoAbono } from '../models/TipoAbono.js';
-import { Abono } from '../models/Abono.js';
+import Pago from '../models/Pago.js';
+import Practicante from '../models/Practicante.js';
+import TipoAbono from '../models/TipoAbono.js';
+import Abono from '../models/Abono.js';
 import { AppError } from '../utils/errors.js';
-import { beginTransaction, commitTransaction, rollbackTransaction } from '../config/database.js';
+import pool from '../config/database.js'; // Import pool to get connection
 
 export class PagoService {
     /**
@@ -14,12 +14,15 @@ export class PagoService {
      * @param {string} [notas=null] - Optional notes for the payment
      * @param {number} [cantidad=1] - Number of units or multipliers
      * @param {Object} [extraData={}] - Extra data (mes_abono, fecha_vencimiento)
+     * @param {number} [userId=null] - ID of the user creating the payment
      * @returns {Promise<Pago>}
      */
-    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null, cantidad = 1, extraData = {}) {
-        const connection = await beginTransaction();
+    static async createPayment(practicanteId, tipoAbonoId, metodoPago = 'efectivo', notas = null, cantidad = 1, extraData = {}, userId = null) {
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
         try {
+            // Use models with the transaction connection
             const practicante = await Practicante.findById(practicanteId, connection);
             if (!practicante) {
                 throw new AppError('Practicante not found', 404);
@@ -38,7 +41,8 @@ export class PagoService {
             let fechaInicio = new Date(today);
 
             if (activeAbono && new Date(activeAbono.fecha_vencimiento) >= today) {
-                fechaInicio = new Date(activeAbono.fecha_vencimiento);
+                const existingVencimiento = new Date(activeAbono.fecha_vencimiento);
+                fechaInicio = new Date(existingVencimiento);
                 fechaInicio.setDate(fechaInicio.getDate() + 1);
             }
 
@@ -48,18 +52,23 @@ export class PagoService {
             if (extraData.fecha_vencimiento) {
                 fechaVencimiento = new Date(extraData.fecha_vencimiento);
             } else {
-                fechaVencimiento = new Date(fechaInicio);
                 // If it's a "unit-based" class (duration 0), expiration is the same day.
                 // If it's a subscription, multiply duration by quantity.
-                const totalDuracion = tipoAbono.duracion_dias * cantidad;
-                fechaVencimiento.setDate(fechaVencimiento.getDate() + totalDuracion);
+                const duracion = tipoAbono.duracion_dias || 30; // Default to 30 if null
+                const totalDuracion = duracion * cantidad;
+                
+                // If fechaInicio was set based on previous abono, use that. 
+                // Otherwise use today or provided date.
+                const baseDate = new Date(fechaInicio);
+                baseDate.setDate(baseDate.getDate() + totalDuracion);
+                fechaVencimiento = baseDate;
             }
 
             const fechaInicioStr = fechaInicio.toISOString().split('T')[0];
             const fechaVencimientoStr = fechaVencimiento.toISOString().split('T')[0];
 
             // 3. Create Abono record
-            const newAbono = await Abono.create({
+            const abonoData = {
                 practicante_id: practicanteId,
                 tipo_abono_id: tipoAbonoId,
                 fecha_inicio: fechaInicioStr,
@@ -68,25 +77,31 @@ export class PagoService {
                 lugar_id: extraData.lugar_id || tipoAbono.lugar_id,
                 estado: 'activo',
                 cantidad: cantidad
-            }, connection);
+            };
+            
+            // Pass userId to create method for history
+            const newAbono = await Abono.create(abonoData, connection, userId);
 
             // 4. Create Pago record linked to the new Abono
             const pagoData = {
                 practicante_id: practicanteId,
                 abono_id: newAbono.id, // Linked to the newly created Abono
                 fecha: fechaPagoStr,
-                monto: tipoAbono.precio * cantidad,
+                monto: (tipoAbono.precio || 0) * cantidad,
                 metodo_pago: metodoPago,
                 notas: notas
             };
 
-            const pago = await Pago.create(pagoData, connection);
+            // Pass userId to create method for history
+            const newPago = await Pago.create(pagoData, connection, userId);
 
-            await commitTransaction(connection);
-            return pago;
+            await connection.commit();
+            return newPago;
         } catch (error) {
-            await rollbackTransaction(connection);
+            await connection.rollback();
             throw error;
+        } finally {
+            connection.release();
         }
     }
 
@@ -111,10 +126,12 @@ export class PagoService {
     /**
      * Delete (soft-delete) a payment and cancel its related abono
      * @param {number} pagoId - ID of the payment to delete
+     * @param {number} [userId=null] - ID of the user deleting the payment
      * @returns {Promise<boolean>}
      */
-    static async deletePayment(pagoId) {
-        const connection = await beginTransaction();
+    static async deletePayment(pagoId, userId = null) {
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
         try {
             const pago = await Pago.findById(pagoId, connection);
@@ -123,18 +140,20 @@ export class PagoService {
             }
 
             // 1. Soft delete the payment
-            const deleted = await Pago.delete(pagoId, connection);
+            const deleted = await Pago.delete(pagoId, connection, userId);
 
             // 2. Mark related abono as 'cancelado' if it exists
             if (pago.abono_id) {
-                await Abono.updateStatus(pago.abono_id, 'cancelado', connection);
+                await Abono.updateStatus(pago.abono_id, 'cancelado', connection, userId);
             }
 
-            await commitTransaction(connection);
+            await connection.commit();
             return deleted;
         } catch (error) {
-            await rollbackTransaction(connection);
+            await connection.rollback();
             throw error;
+        } finally {
+            connection.release();
         }
     }
 }

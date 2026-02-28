@@ -24,11 +24,12 @@ router.get('/', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
+    const userId = req.user.id;
     if (isNaN(id)) {
         throw new AppError('Invalid ID: ID must be a valid integer', 400);
     }
     
-    await PagoService.deletePayment(id);
+    await PagoService.deletePayment(id, userId);
     res.status(200).json({ message: 'Payment deleted successfully', data: { id } });
 }));
 

@@ -6,6 +6,7 @@
 import PracticanteForm from '../components/PracticanteForm.js';
 import PracticanteList from '../components/PracticanteList.js';
 import PracticanteDetail from '../components/PracticanteDetail.js';
+import PracticanteHistory from '../components/PracticanteHistory.js';
 import { showSuccess, displayApiError } from '../utils/errors.js'; // Import displayApiError for error handling
 import { practicanteApi } from '../api/client.js'; // Import practicanteApi to fetch individual practicante
 
@@ -16,7 +17,7 @@ export class PracticantesPage {
             initialPracticanteId: options.initialPracticanteId || null,
             openPaymentModalInitially: options.openPaymentModalInitially || false,
         };
-        this.currentView = 'list'; // 'list', 'form', 'detail'
+        this.currentView = 'list'; // 'list', 'form', 'detail', 'history'
         this.selectedPracticante = null;
     }
 
@@ -93,6 +94,9 @@ export class PracticantesPage {
             onPayAbono: (practicante) => { // Handle onPayAbono event
                 this.selectedPracticante = practicante;
                 this.showDetail(practicante, true); // Pass true to open payment modal
+            },
+            onShowHistory: (practicante) => {
+                this.showHistory(practicante);
             }
         });
 
@@ -139,6 +143,23 @@ export class PracticantesPage {
         });
 
         detail.render(practicante);
+    }
+
+    showHistory(practicante) {
+        this.currentView = 'history';
+        const content = this.container.querySelector('#practicantes-content');
+
+        content.innerHTML = '<div id="history-container"></div>';
+        const historyContainer = content.querySelector('#history-container');
+
+        const history = new PracticanteHistory(historyContainer, {
+            practicante: practicante,
+            onClose: () => {
+                this.showList();
+            }
+        });
+
+        history.render();
     }
 }
 

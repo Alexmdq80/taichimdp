@@ -53,14 +53,28 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/practicantes/:id/history
+ * Get practicante history
+ */
+router.get('/:id/history', asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+      throw new AppError('Invalid ID: ID must be a valid integer', 400);
+  }
+  const history = await PracticanteService.getHistory(id);
+  res.json({ data: history });
+}));
+
+/**
  * POST /api/practicantes
  * Create a new practicante
  */
 router.post('/', asyncHandler(async (req, res) => {
   // Sanitize input
   const data = sanitizeObject(req.body);
+  const userId = req.user.id;
   
-  const practicante = await PracticanteService.create(data);
+  const practicante = await PracticanteService.create(data, userId);
   res.status(201).json({ data: practicante });
 }));
 
@@ -70,6 +84,7 @@ router.post('/', asyncHandler(async (req, res) => {
  */
 router.put('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  const userId = req.user.id;
   
   if (isNaN(id)) {
     throw new AppError('Invalid ID: ID must be a valid integer', 400);
@@ -78,7 +93,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   // Sanitize input
   const data = sanitizeObject(req.body);
   
-  const practicante = await PracticanteService.update(id, data);
+  const practicante = await PracticanteService.update(id, data, userId);
   res.json({ data: practicante });
 }));
 
@@ -88,12 +103,13 @@ router.put('/:id', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  const userId = req.user.id;
   
   if (isNaN(id)) {
     throw new AppError('Invalid ID: ID must be a valid integer', 400);
   }
 
-  await PracticanteService.delete(id);
+  await PracticanteService.delete(id, userId);
   res.json({
     message: 'Practicante deleted successfully',
     data: { id }
@@ -106,6 +122,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
  */
 router.post('/:id/pagar', asyncHandler(async (req, res) => {
   const practicanteId = parseInt(req.params.id, 10);
+  const userId = req.user.id;
   if (isNaN(practicanteId)) {
     throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
   }
@@ -128,7 +145,7 @@ router.post('/:id/pagar', asyncHandler(async (req, res) => {
     lugar_id: lugar_id ? parseInt(lugar_id, 10) : null
   };
 
-  const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas, cantidadVal, extraData); // Pass extraData
+  const pago = await PagoService.createPayment(practicanteId, tipoAbonoId, metodo_pago, notas, cantidadVal, extraData, userId); // Pass extraData and userId
   res.status(201).json({ message: 'Payment recorded successfully', data: pago });
 }));
 
@@ -152,11 +169,12 @@ router.get('/:id/pagos', asyncHandler(async (req, res) => {
  */
 router.delete('/:id/pagos/:pagoId', asyncHandler(async (req, res) => {
   const pagoId = parseInt(req.params.pagoId, 10);
+  const userId = req.user.id;
   if (isNaN(pagoId)) {
     throw new AppError('Invalid Pago ID: ID must be a valid integer', 400);
   }
 
-  await PagoService.deletePayment(pagoId);
+  await PagoService.deletePayment(pagoId, userId);
   res.status(200).json({ message: 'Payment deleted successfully', data: { id: pagoId } });
 }));
 

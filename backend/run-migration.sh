@@ -68,7 +68,20 @@ echo -e "${GREEN}Database created/verified.${NC}"
 
 # Run migrations in order
 MIGRATIONS_DIR="migrations"
-for migration in $(ls "$MIGRATIONS_DIR"/*.sql | sort); do
+MIGRATION_ARG=$1
+
+if [ -n "$MIGRATION_ARG" ]; then
+    if [ -f "$MIGRATION_ARG" ]; then
+        MIGRATIONS_TO_RUN="$MIGRATION_ARG"
+    else
+        echo -e "${RED}ERROR: Migration file '$MIGRATION_ARG' not found.${NC}"
+        exit 1
+    fi
+else
+    MIGRATIONS_TO_RUN=$(ls "$MIGRATIONS_DIR"/*.sql | sort)
+fi
+
+for migration in $MIGRATIONS_TO_RUN; do
     echo -e "${YELLOW}Executing $(basename "$migration")...${NC}"
     $MYSQL_CMD "$DB_NAME" < "$migration"
     

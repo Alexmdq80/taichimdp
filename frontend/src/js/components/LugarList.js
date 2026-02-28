@@ -9,7 +9,8 @@ export class LugarList {
   constructor(container, options = {}) {
     this.container = container;
     this.options = {
-      onEdit: options.onEdit || (() => {})
+      onEdit: options.onEdit || (() => {}),
+      onShowHistory: options.onShowHistory || (() => {})
     };
     this.lugares = [];
   }
@@ -70,6 +71,7 @@ export class LugarList {
                 </td>
                 <td>
                   <button class="btn btn-secondary btn-sm edit-btn" data-id="${l.id}">Editar</button>
+                  <button class="btn btn-info btn-sm history-btn" data-id="${l.id}">Historial</button>
                   <button class="btn btn-danger btn-sm delete-btn" data-id="${l.id}">Eliminar</button>
                 </td>
               </tr>
@@ -90,6 +92,16 @@ export class LugarList {
         const id = parseInt(e.target.getAttribute('data-id'), 10);
         const lugar = this.lugares.find(l => l.id === id);
         this.options.onEdit(lugar);
+      });
+    });
+
+    this.container.querySelectorAll('.history-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.target.getAttribute('data-id'), 10);
+        const lugar = this.lugares.find(l => l.id === id);
+        if (this.options.onShowHistory) {
+          this.options.onShowHistory(lugar);
+        }
       });
     });
 

@@ -5,11 +5,12 @@
 
 import { LugarList } from '../components/LugarList.js';
 import { LugarForm } from '../components/LugarForm.js';
+import { LugarHistory } from '../components/LugarHistory.js';
 
 export class LugaresPage {
   constructor(container) {
     this.container = container;
-    this.currentView = 'list'; // 'list' or 'form'
+    this.currentView = 'list'; // 'list', 'form' or 'history'
     this.selectedLugar = null;
   }
 
@@ -47,10 +48,15 @@ export class LugaresPage {
           this.selectedLugar = lugar;
           this.currentView = 'form';
           this.render();
+        },
+        onShowHistory: (lugar) => {
+          this.selectedLugar = lugar;
+          this.currentView = 'history';
+          this.render();
         }
       });
       list.render();
-    } else {
+    } else if (this.currentView === 'form') {
       const form = new LugarForm(content, {
         lugar: this.selectedLugar,
         onSuccess: () => {
@@ -63,6 +69,15 @@ export class LugaresPage {
         }
       });
       form.render();
+    } else if (this.currentView === 'history') {
+      const history = new LugarHistory(content, {
+        lugar: this.selectedLugar,
+        onClose: () => {
+          this.currentView = 'list';
+          this.render();
+        }
+      });
+      history.render();
     }
   }
 }

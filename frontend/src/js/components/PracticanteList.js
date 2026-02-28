@@ -15,7 +15,7 @@ export class PracticanteList {
       onSelect: options.onSelect || (() => {}),
       onEdit: options.onEdit || (() => {}),
       onDelete: options.onDelete || (() => {}),
-      // onPayAbono: options.onPayAbono || (() => {}) // This option is no longer needed directly
+      onShowHistory: options.onShowHistory || (() => {}),
     };
     this.practicantes = [];
     this.currentPage = 1;
@@ -155,6 +155,14 @@ export class PracticanteList {
                   Ver
                 </button>
                 <button 
+                  class="btn btn-info" 
+                  data-action="history" 
+                  data-id="${practicante.id}"
+                  style="margin-right: 0.5rem;"
+                >
+                  Historial
+                </button>
+                <button 
                   class="btn btn-secondary" 
                   data-action="edit" 
                   data-id="${practicante.id}"
@@ -247,6 +255,9 @@ export class PracticanteList {
         break;
       case 'edit':
         this.options.onEdit(practicante);
+        break;
+      case 'history':
+        this.options.onShowHistory(practicante);
         break;
       case 'delete':
         if (confirm(`¿Está seguro de que desea eliminar a ${practicante.nombre_completo}?`)) {

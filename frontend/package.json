@@ -1,7 +1,7 @@
 {
     "name": "tai-chi-management-frontend",
     "version": "1.0.0",
-    "description": "Frontend for Tai Chi Chuan Management System",
+    "description": "Frontend for Sistema de Gestión de Clases",
     "type": "module",
     "scripts": {
         "dev": "vite",

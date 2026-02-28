@@ -18,14 +18,16 @@ export class Practicante {
         this.alergias = data.alergias || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
+        this.deleted_at = data.deleted_at || null;
     }
 
     /**
-     * Create a new practicante
+     * Create a new practicante and record history
      * @param {Object} data - Practicante data
+     * @param {number} userId - ID of the user creating it
      * @returns {Promise<Practicante>}
      */
-    static async create(data) {
+    static async create(data, userId = null) {
         const sql = `
       INSERT INTO Practicante (
         nombre_completo, fecha_nacimiento, genero, telefono, email,
@@ -47,17 +49,23 @@ export class Practicante {
         ];
 
         const [result] = await pool.execute(sql, values);
-        return await this.findById(result.insertId);
+        const newPracticante = await this.findById(result.insertId);
+
+        if (newPracticante) {
+            await this.recordHistory(newPracticante.id, 'CREATE', null, newPracticante.toJSON(), userId);
+        }
+
+        return newPracticante;
     }
 
     /**
-     * Find practicante by ID
+     * Find practicante by ID (only non-deleted)
      * @param {number} id - Practicante ID
      * @param {Object} [connection] - Database connection
      * @returns {Promise<Practicante|null>}
      */
     static async findById(id, connection = null) {
-        const sql = 'SELECT * FROM Practicante WHERE id = ?';
+        const sql = 'SELECT * FROM Practicante WHERE id = ? AND deleted_at IS NULL';
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
 
@@ -69,7 +77,7 @@ export class Practicante {
     }
 
     /**
-     * Find all practicantes with optional search
+     * Find all practicantes with optional search (only non-deleted)
      * @param {Object} options - Search options
      * @param {string} options.search - Search term (nombre, telefono, email)
      * @param {number} options.page - Page number
@@ -85,11 +93,11 @@ export class Practicante {
         const offset = (pageNum - 1) * limitNum;
 
         // Build WHERE clause
-        let whereClause = '';
+        let whereClause = ' WHERE deleted_at IS NULL';
         const searchParams = [];
 
         if (search && search.trim() !== '') {
-            whereClause = ' WHERE (nombre_completo LIKE ? OR IFNULL(telefono, "") LIKE ? OR IFNULL(email, "") LIKE ?)';
+            whereClause += ' AND (nombre_completo LIKE ? OR IFNULL(telefono, "") LIKE ? OR IFNULL(email, "") LIKE ?)';
             const searchTerm = `%${search.trim()}%`;
             searchParams.push(searchTerm, searchTerm, searchTerm);
         }
@@ -118,12 +126,16 @@ export class Practicante {
     }
 
     /**
-     * Update practicante
+     * Update practicante and record history
      * @param {number} id - Practicante ID
      * @param {Object} data - Updated data
+     * @param {number} userId - ID of the user making the update
      * @returns {Promise<Practicante|null>}
      */
-    static async update(id, data) {
+    static async update(id, data, userId = null) {
+        const currentData = await this.findById(id);
+        if (!currentData) return null;
+
         const allowedFields = [
             'nombre_completo', 'fecha_nacimiento', 'genero', 'telefono', 'email',
             'direccion', 'condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias'
@@ -140,25 +152,96 @@ export class Practicante {
         }
 
         if (updates.length === 0) {
-            return await this.findById(id);
+            return currentData;
         }
 
         values.push(id);
-        const sql = `UPDATE Practicante SET ${updates.join(', ')} WHERE id = ?`;
+        const sql = `UPDATE Practicante SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`;
 
         await pool.execute(sql, values);
-        return await this.findById(id);
+        
+        const updatedPracticante = await this.findById(id);
+
+        if (updatedPracticante) {
+            await this.recordHistory(
+                id,
+                'UPDATE',
+                currentData.toJSON(),
+                updatedPracticante.toJSON(),
+                userId
+            );
+        }
+
+        return updatedPracticante;
     }
 
     /**
-     * Delete practicante
+     * Soft delete practicante and record history
      * @param {number} id - Practicante ID
+     * @param {number} userId - ID of the user performing the deletion
      * @returns {Promise<boolean>}
      */
-    static async delete(id) {
-        const sql = 'DELETE FROM Practicante WHERE id = ?';
+    static async delete(id, userId = null) {
+        const currentData = await this.findById(id);
+        if (!currentData) return false;
+
+        const sql = 'UPDATE Practicante SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL';
         const [result] = await pool.execute(sql, [id]);
-        return result.affectedRows > 0;
+
+        if (result.affectedRows > 0) {
+            await this.recordHistory(id, 'DELETE', currentData.toJSON(), null, userId);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Record modification history
+     * @param {number} practicanteId - Practicante ID
+     * @param {string} action - Action performed (CREATE, UPDATE, DELETE)
+     * @param {Object|null} oldData - Data before change
+     * @param {Object|null} newData - Data after change
+     * @param {number|null} userId - ID of the user who performed the action
+     * @returns {Promise<void>}
+     */
+    static async recordHistory(practicanteId, action, oldData, newData, userId) {
+        const sql = `
+            INSERT INTO HistorialPracticante (
+                practicante_id, accion, datos_anteriores, datos_nuevos, usuario_id
+            ) VALUES (?, ?, ?, ?, ?)
+        `;
+
+        const values = [
+            practicanteId,
+            action,
+            oldData ? JSON.stringify(oldData) : null,
+            newData ? JSON.stringify(newData) : null,
+            userId
+        ];
+
+        await pool.execute(sql, values);
+    }
+
+    /**
+     * Get history of a practicante
+     * @param {number} id - Practicante ID
+     * @returns {Promise<Array>}
+     */
+    static async getHistory(id) {
+        const sql = `
+            SELECT h.*, u.email as usuario_email
+            FROM HistorialPracticante h
+            LEFT JOIN User u ON h.usuario_id = u.id
+            WHERE h.practicante_id = ?
+            ORDER BY h.fecha DESC
+        `;
+        const [rows] = await pool.execute(sql, [id]);
+        return rows.map(row => ({
+            ...row,
+            datos_anteriores: typeof row.datos_anteriores === 'string' ? JSON.parse(row.datos_anteriores) : row.datos_anteriores,
+            datos_nuevos: typeof row.datos_nuevos === 'string' ? JSON.parse(row.datos_nuevos) : row.datos_nuevos
+        }));
     }
 
     /**
@@ -167,11 +250,13 @@ export class Practicante {
      * @returns {Promise<boolean>}
      */
     static async hasRelatedRecords(id) {
+        // We only check for active related records, or maybe we don't care since we soft delete?
+        // Let's keep checking for now but consider deleted_at
         const sql = `
       SELECT 
-        (SELECT COUNT(*) FROM Abono WHERE practicante_id = ?) as abonos,
-        (SELECT COUNT(*) FROM Pago WHERE practicante_id = ?) as pagos,
-        (SELECT COUNT(*) FROM Asistencia WHERE practicante_id = ?) as asistencias
+        (SELECT COUNT(*) FROM Abono WHERE practicante_id = ? AND deleted_at IS NULL) as abonos,
+        (SELECT COUNT(*) FROM Pago WHERE practicante_id = ? AND deleted_at IS NULL) as pagos,
+        (SELECT COUNT(*) FROM Asistencia WHERE practicante_id = ? AND deleted_at IS NULL) as asistencias
     `;
         const [rows] = await pool.execute(sql, [id, id, id]);
         const counts = rows[0];
@@ -196,7 +281,8 @@ export class Practicante {
             limitaciones_fisicas: this.limitaciones_fisicas,
             alergias: this.alergias,
             created_at: this.created_at,
-            updated_at: this.updated_at
+            updated_at: this.updated_at,
+            deleted_at: this.deleted_at
         };
     }
 }
