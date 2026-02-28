@@ -60,4 +60,16 @@ export const practicanteApi = {
     create: (data) => makeRequest('/practicantes', 'POST', data, true),
     update: (id, data) => makeRequest(`/practicantes/${id}`, 'PUT', data, true),
     delete: (id) => makeRequest(`/practicantes/${id}`, 'DELETE', null, true),
-};
+    };
+
+    // Generic API client for other resources
+    export const apiClient = {
+    get: (endpoint, params = {}) => {
+        const queryParams = new URLSearchParams(params).toString();
+        const url = queryParams ? `${endpoint}?${queryParams}` : endpoint;
+        return makeRequest(url, 'GET', null, true);
+    },
+    post: (endpoint, data) => makeRequest(endpoint, 'POST', data, true),
+    put: (endpoint, data) => makeRequest(endpoint, 'PUT', data, true),
+    delete: (endpoint) => makeRequest(endpoint, 'DELETE', null, true)
+    };

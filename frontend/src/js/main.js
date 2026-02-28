@@ -10,6 +10,8 @@ import TiposAbonoPage from './pages/tiposAbono.js'; // Import the new page compo
 import PagosPage from './pages/pagos.js'; // Import PagosPage
 import LugaresPage from './pages/lugares.js'; // Import LugaresPage
 import ActividadesPage from './pages/actividades.js'; // Import ActividadesPage
+import HorariosPage from './pages/horarios.js'; // Import HorariosPage
+import AsistenciaPage from './pages/asistencia.js'; // Import AsistenciaPage
 
 // Function to check if user is authenticated
 function isAuthenticated() {
@@ -54,6 +56,16 @@ function updateNavigation() {
       actividadesLink.href = '/actividades';
       actividadesLink.textContent = 'Actividades';
       navLinksDiv.appendChild(actividadesLink);
+
+      const horariosLink = document.createElement('a'); // New link for Horarios
+      horariosLink.href = '/horarios';
+      horariosLink.textContent = 'Horarios';
+      navLinksDiv.appendChild(horariosLink);
+
+      const asistenciaLink = document.createElement('a'); // New link for Asistencia
+      asistenciaLink.href = '/asistencia';
+      asistenciaLink.textContent = 'Asistencia';
+      navLinksDiv.appendChild(asistenciaLink);
 
       const logoutLink = document.createElement('a');
       logoutLink.href = '#'; // Prevent default navigation
@@ -192,6 +204,32 @@ route('/actividades', () => { // New route for Actividades
   const mainContent = document.querySelector('#main-content');
   if (mainContent) {
     const page = new ActividadesPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/horarios', () => { // New route for Horarios
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new HorariosPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/asistencia', () => { // New route for Asistencia
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new AsistenciaPage(mainContent);
     page.render();
   }
   updateNavigation(); // Update navigation after routing

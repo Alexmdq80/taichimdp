@@ -36,6 +36,8 @@ import tiposAbonoRoutes from './routes/tiposAbono.js'; // Import tiposAbono rout
 import pagosRoutes from './routes/pagos.js'; // Import pagos routes
 import lugaresRoutes from './routes/lugares.js'; // Import lugares routes
 import actividadesRoutes from './routes/actividades.js'; // Import actividades routes
+import horariosRoutes from './routes/horarios.js'; // Import horarios routes
+import asistenciaRoutes from './routes/asistencia.js'; // Import asistencia routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
@@ -44,6 +46,8 @@ app.use('/api/tipos-abono', tiposAbonoRoutes); // Mount tiposAbono routes
 app.use('/api/pagos', pagosRoutes); // Mount pagos routes
 app.use('/api/lugares', lugaresRoutes); // Mount lugares routes
 app.use('/api/actividades', actividadesRoutes); // Mount actividades routes
+app.use('/api/horarios', horariosRoutes); // Mount horarios routes
+app.use('/api/asistencia', asistenciaRoutes); // Mount asistencia routes (includes /api/asistencia/clases)
 
 // 404 handler
 app.use((req, res) => {
