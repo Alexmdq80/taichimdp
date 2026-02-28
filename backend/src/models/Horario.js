@@ -42,7 +42,9 @@ export class Horario {
         }
         if (filters.activo !== undefined && filters.activo !== '') {
             sql += ' AND h.activo = ?';
-            params.push(filters.activo === 'true' || filters.activo === 1 ? 1 : 0);
+            // Handle both boolean (from service) and string/number (from query params)
+            const isActive = (filters.activo === true || filters.activo === 'true' || filters.activo == 1);
+            params.push(isActive ? 1 : 0);
         }
 
         sql += ' ORDER BY h.dia_semana, h.hora_inicio';

@@ -1,11 +1,13 @@
 import { apiClient } from '../api/client.js';
 import { displayApiError, showSuccess } from '../utils/errors.js';
 import { ClaseList } from '../components/ClaseList.js';
+import { AsistenciaMarker } from '../components/AsistenciaMarker.js';
+import { ClaseForm } from '../components/ClaseForm.js';
 
 export class AsistenciaPage {
   constructor(container) {
     this.container = container;
-    this.currentView = 'list'; // 'list', 'attendance'
+    this.currentView = 'list'; // 'list', 'attendance', 'form'
     this.selectedClase = null;
     
     // Rango por defecto: hoy +/- 7 días
@@ -24,6 +26,7 @@ export class AsistenciaPage {
       <div class="page-header">
         <h1>Control de Asistencia</h1>
         <div class="actions">
+          <button id="new-manual-clase-btn" class="btn btn-primary">Nueva Clase Manual</button>
           <button id="generate-clases-btn" class="btn btn-secondary">Generar Clases de la Semana</button>
           <button id="refresh-btn" class="btn btn-outline-primary">Actualizar</button>
         </div>
@@ -84,31 +87,39 @@ export class AsistenciaPage {
         displayApiError(error);
       }
     } else if (this.currentView === 'attendance') {
-      // Placeholder for taking attendance functionality
-      content.innerHTML = `
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h3>Asistencia: ${this.selectedClase.actividad_nombre}</h3>
-            <button id="back-to-list-btn" class="btn btn-secondary btn-sm">Volver al listado</button>
-          </div>
-          <div class="card-body">
-            <p><strong>Fecha:</strong> ${this.selectedClase.fecha} | <strong>Lugar:</strong> ${this.selectedClase.lugar_nombre}</p>
-            <hr>
-            <div class="alert alert-info">
-              Funcionalidad de selección de practicantes en desarrollo (US4 - Fase 2).
-            </div>
-          </div>
-        </div>
-      `;
-      
-      this.container.querySelector('#back-to-list-btn').addEventListener('click', () => {
-        this.currentView = 'list';
-        this.renderView();
+      const marker = new AsistenciaMarker(content, {
+        clase: this.selectedClase,
+        onClose: () => {
+          this.currentView = 'list';
+          this.renderView();
+        }
       });
+      marker.render();
+    } else if (this.currentView === 'form') {
+      const form = new ClaseForm(content, {
+        clase: this.selectedClase,
+        onSuccess: () => {
+          this.currentView = 'list';
+          this.selectedClase = null;
+          this.renderView();
+        },
+        onCancel: () => {
+          this.currentView = 'list';
+          this.selectedClase = null;
+          this.renderView();
+        }
+      });
+      await form.render();
     }
   }
 
   attachEvents() {
+    this.container.querySelector('#new-manual-clase-btn').addEventListener('click', () => {
+      this.selectedClase = null;
+      this.currentView = 'form';
+      this.renderView();
+    });
+
     this.container.querySelector('#filter-btn').addEventListener('click', () => {
       this.filters.fecha_inicio = this.container.querySelector('#fecha_inicio').value;
       this.filters.fecha_fin = this.container.querySelector('#fecha_fin').value;
