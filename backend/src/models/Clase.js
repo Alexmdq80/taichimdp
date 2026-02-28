@@ -9,7 +9,9 @@ export class Clase {
         this.fecha = data.fecha;
         this.hora = data.hora;
         this.hora_fin = data.hora_fin;
-        this.descripcion = data.descripcion || null;
+        this.estado = data.estado || 'programada';
+        this.motivo_cancelacion = data.motivo_cancelacion || null;
+        this.observaciones = data.observaciones || null;
         this.usuario_id = data.usuario_id || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
@@ -70,8 +72,8 @@ export class Clase {
 
     static async create(data) {
         const sql = `
-            INSERT INTO Clase (horario_id, actividad_id, lugar_id, fecha, hora, hora_fin, descripcion, usuario_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Clase (horario_id, actividad_id, lugar_id, fecha, hora, hora_fin, estado, motivo_cancelacion, observaciones, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const values = [
             data.horario_id || null,
@@ -80,12 +82,34 @@ export class Clase {
             data.fecha,
             data.hora,
             data.hora_fin,
-            data.descripcion || null,
+            data.estado || 'programada',
+            data.motivo_cancelacion || null,
+            data.observaciones || null,
             data.usuario_id || null
         ];
 
         const [result] = await pool.execute(sql, values);
         return await this.findById(result.insertId);
+    }
+
+    static async update(id, data) {
+        const sql = `
+            UPDATE Clase 
+            SET estado = ?, motivo_cancelacion = ?, observaciones = ?, 
+                fecha = ?, hora = ?, hora_fin = ?
+            WHERE id = ? AND deleted_at IS NULL
+        `;
+        const values = [
+            data.estado,
+            data.motivo_cancelacion || null,
+            data.observaciones || null,
+            data.fecha,
+            data.hora,
+            data.hora_fin,
+            id
+        ];
+        const [result] = await pool.execute(sql, values);
+        return result.affectedRows > 0;
     }
 
     static async delete(id) {
@@ -103,7 +127,9 @@ export class Clase {
             fecha: this.fecha,
             hora: this.hora,
             hora_fin: this.hora_fin,
-            descripcion: this.descripcion,
+            estado: this.estado,
+            motivo_cancelacion: this.motivo_cancelacion,
+            observaciones: this.observaciones,
             actividad_nombre: this.actividad_nombre,
             lugar_nombre: this.lugar_nombre,
             asistentes_count: this.asistentes_count,

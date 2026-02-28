@@ -42,25 +42,38 @@ router.get('/clases/:id/practicantes', asyncHandler(async (req, res) => {
 
 /**
  * POST /api/asistencia/clases/:id/registrar
- * Registra la asistencia de múltiples practicantes a la vez.
+ * Registra la asistencia de múltiples practicantes a la vez y actualiza el estado de la clase.
  */
 router.post('/clases/:id/registrar', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const { asistencias } = req.body; // Array de { practicante_id, asistio }
+    const { asistencias, estado, observaciones, motivo_cancelacion } = req.body;
 
-    if (!Array.isArray(asistencias)) {
-        throw new AppError('Se requiere un array de asistencias', 400);
+    const clase = await Clase.findById(id);
+    if (!clase) throw new AppError('Clase no encontrada', 404);
+
+    // 1. Actualizar datos de la clase
+    const updateData = {
+        estado: estado || (asistencias && asistencias.length > 0 ? 'realizada' : clase.estado),
+        observaciones: observaciones !== undefined ? observaciones : clase.observaciones,
+        motivo_cancelacion: motivo_cancelacion !== undefined ? motivo_cancelacion : clase.motivo_cancelacion,
+        fecha: clase.fecha,
+        hora: clase.hora,
+        hora_fin: clase.hora_fin
+    };
+    await Clase.update(id, updateData);
+
+    // 2. Registrar asistencias si la clase no está cancelada/suspendida
+    if (asistencias && Array.isArray(asistencias) && updateData.estado !== 'cancelada' && updateData.estado !== 'suspendida') {
+        for (const a of asistencias) {
+            await Asistencia.upsert({
+                clase_id: id,
+                practicante_id: a.practicante_id,
+                asistio: a.asistio
+            });
+        }
     }
 
-    for (const a of asistencias) {
-        await Asistencia.upsert({
-            clase_id: id,
-            practicante_id: a.practicante_id,
-            asistio: a.asistio
-        });
-    }
-
-    res.json({ message: 'Asistencia registrada con éxito' });
+    res.json({ message: 'Asistencia y estado de clase actualizados con éxito' });
 }));
 
 /**

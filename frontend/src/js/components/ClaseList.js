@@ -15,6 +15,13 @@ export class ClaseList {
   }
 
   render() {
+    const statusBadges = {
+      'programada': 'badge-info',
+      'realizada': 'badge-success',
+      'cancelada': 'badge-danger',
+      'suspendida': 'badge-warning'
+    };
+
     this.container.innerHTML = `
       <div class="table-responsive">
         <table class="table table-hover">
@@ -24,26 +31,34 @@ export class ClaseList {
               <th>Horario</th>
               <th>Actividad</th>
               <th>Lugar</th>
+              <th>Estado</th>
               <th>Asistentes</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            ${this.clases.length === 0 ? '<tr><td colspan="6" class="text-center">No hay clases registradas en este periodo</td></tr>' : ''}
+            ${this.clases.length === 0 ? '<tr><td colspan="7" class="text-center">No hay clases registradas en este periodo</td></tr>' : ''}
             ${this.clases.map(c => `
-              <tr>
+              <tr class="${c.estado === 'cancelada' || c.estado === 'suspendida' ? 'table-light text-muted' : ''}">
                 <td><strong>${formatDate(c.fecha)}</strong></td>
                 <td>${c.hora.substring(0, 5)} - ${c.hora_fin.substring(0, 5)}</td>
                 <td>${c.actividad_nombre}</td>
                 <td>${c.lugar_nombre}</td>
                 <td>
-                  <span class="badge ${c.asistentes_count > 0 ? 'badge-primary' : 'badge-secondary'}">
-                    ${c.asistentes_count} presentes
+                  <span class="badge ${statusBadges[c.estado] || 'badge-secondary'}">
+                    ${c.estado.charAt(0).toUpperCase() + c.estado.slice(1)}
                   </span>
                 </td>
                 <td>
-                  <button class="btn btn-primary btn-sm attendance-btn" data-id="${c.id}">
-                    Tomar Asistencia
+                  ${c.estado === 'cancelada' || c.estado === 'suspendida' ? '-' : `
+                    <span class="badge ${c.asistentes_count > 0 ? 'badge-primary' : 'badge-light'}">
+                      ${c.asistentes_count} presentes
+                    </span>
+                  `}
+                </td>
+                <td>
+                  <button class="btn ${c.estado === 'programada' ? 'btn-primary' : 'btn-secondary'} btn-sm attendance-btn" data-id="${c.id}">
+                    ${c.estado === 'programada' ? 'Tomar Asistencia' : 'Gestionar'}
                   </button>
                   <button class="btn btn-danger btn-sm delete-btn" data-id="${c.id}">
                     Eliminar
