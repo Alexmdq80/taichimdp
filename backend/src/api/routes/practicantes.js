@@ -24,8 +24,8 @@ router.get('/', asyncHandler(async (req, res) => {
     throw new AppError('Invalid query parameters: page must be a positive integer', 400);
   }
   
-  if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-    throw new AppError('Invalid query parameters: limit must be a positive integer between 1 and 100', 400);
+  if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+    throw new AppError('Invalid query parameters: limit must be a positive integer between 1 and 1000', 400);
   }
 
   const result = await PracticanteService.findAll({

@@ -8,16 +8,18 @@ export class Pago {
         this.id = data.id || null;
         this.practicante_id = data.practicante_id;
         this.abono_id = data.abono_id;
+        this.mes_abono = data.mes_abono || null;
+        this.lugar_id = data.lugar_id || null;
         this.fecha = data.fecha || new Date().toISOString().split('T')[0];
         this.monto = data.monto;
         this.metodo_pago = data.metodo_pago || null;
         this.notas = data.notas || null;
-        this.tipo_abono_nombre = data.tipo_abono_nombre || null; // New field from join
-        this.practicante_nombre = data.practicante_nombre || null; // New field from join
-        this.categoria = data.categoria || null; // New field from join
-        this.mes_abono = data.mes_abono || null; // New field from join
-        this.lugar_nombre = data.lugar_nombre || null; // New field from join
-        this.fecha_vencimiento = data.fecha_vencimiento || null; // New field from join
+        this.tipo_abono_nombre = data.tipo_abono_nombre || null; 
+        this.practicante_nombre = data.practicante_nombre || null; 
+        this.categoria = data.categoria || null; 
+        this.lugar_nombre = data.lugar_nombre || null; 
+        this.fecha_vencimiento = data.fecha_vencimiento || null; 
+        this.horarios_ids = data.horarios_ids || []; 
         this.deleted_at = data.deleted_at || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
@@ -33,13 +35,15 @@ export class Pago {
     static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Pago (
-                practicante_id, abono_id, fecha, monto, metodo_pago, notas
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                practicante_id, abono_id, mes_abono, lugar_id, fecha, monto, metodo_pago, notas
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
             data.practicante_id,
             data.abono_id,
+            data.mes_abono || null,
+            data.lugar_id || null,
             data.fecha,
             data.monto,
             data.metodo_pago || null,
@@ -65,12 +69,13 @@ export class Pago {
     static async findAll(filters = {}) {
         let sql = `
             SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
-                   a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
+                   a.fecha_vencimiento, l.nombre as lugar_nombre,
+                   (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
-            LEFT JOIN Lugar l ON a.lugar_id = l.id
+            LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.deleted_at IS NULL
         `;
         const params = [];
@@ -88,7 +93,11 @@ export class Pago {
         sql += ' ORDER BY p.fecha DESC, p.created_at DESC';
 
         const [rows] = await pool.execute(sql, params);
-        return rows.map(row => new Pago(row));
+        return rows.map(row => {
+            const rowData = { ...row };
+            rowData.horarios_ids = typeof row.schedules === 'string' ? JSON.parse(row.schedules) : (row.schedules || []);
+            return new Pago(rowData);
+        });
     }
 
     /**
@@ -99,13 +108,14 @@ export class Pago {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, pr.nombre_completo as practicante_nombre,
-                   a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
+            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
+                   a.fecha_vencimiento, l.nombre as lugar_nombre,
+                   (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
-            LEFT JOIN Lugar l ON a.lugar_id = l.id
+            LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.id = ? AND p.deleted_at IS NULL
         `;
         const executor = connection || pool;
@@ -115,7 +125,9 @@ export class Pago {
             return null;
         }
 
-        return new Pago(rows[0]);
+        const row = rows[0];
+        row.horarios_ids = typeof row.schedules === 'string' ? JSON.parse(row.schedules) : (row.schedules || []);
+        return new Pago(row);
     }
 
     /**
@@ -125,16 +137,21 @@ export class Pago {
      */
     static async findByPracticanteId(practicanteId) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, a.mes_abono, a.fecha_vencimiento, l.nombre as lugar_nombre
+            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, a.fecha_vencimiento, l.nombre as lugar_nombre,
+                   (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
             JOIN Abono a ON p.abono_id = a.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
-            LEFT JOIN Lugar l ON a.lugar_id = l.id
+            LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.practicante_id = ? AND p.deleted_at IS NULL
             ORDER BY p.fecha DESC
         `;
         const [rows] = await pool.execute(sql, [practicanteId]);
-        return rows.map(row => new Pago(row));
+        return rows.map(row => {
+            const rowData = { ...row };
+            rowData.horarios_ids = typeof row.schedules === 'string' ? JSON.parse(row.schedules) : (row.schedules || []);
+            return new Pago(rowData);
+        });
     }
 
     /**
@@ -218,13 +235,18 @@ export class Pago {
             id: this.id,
             practicante_id: this.practicante_id,
             abono_id: this.abono_id,
+            mes_abono: this.mes_abono,
+            lugar_id: this.lugar_id,
             fecha: this.fecha,
             monto: this.monto,
             metodo_pago: this.metodo_pago,
             notas: this.notas,
-            tipo_abono_nombre: this.tipo_abono_nombre, // New
-            practicante_nombre: this.practicante_nombre, // New
-            categoria: this.categoria, // New
+            tipo_abono_nombre: this.tipo_abono_nombre,
+            practicante_nombre: this.practicante_nombre,
+            categoria: this.categoria,
+            lugar_nombre: this.lugar_nombre,
+            fecha_vencimiento: this.fecha_vencimiento,
+            horarios_ids: this.horarios_ids,
             deleted_at: this.deleted_at,
             created_at: this.created_at,
             updated_at: this.updated_at

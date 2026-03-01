@@ -57,22 +57,44 @@ export class Asistencia {
      * Obtiene los practicantes elegibles para una clase (con abono activo).
      * Esto es clave para mostrar la lista de "presentismo".
      */
-    static async getEligiblePracticantes(actividadId, lugarId, fecha) {
+    static async getEligiblePracticantes(clase) {
+        // Mostramos a TODOS los alumnos del sistema para todas las clases y estados.
+        // Esto permite máxima flexibilidad para anotar a cualquier alumno en cualquier momento.
         const sql = `
-            SELECT p.id, p.nombre_completo, ab.id as abono_id, ta.nombre as abono_nombre
+            SELECT p.id, p.nombre_completo, 
+                   MAX(ab.id) as abono_id, 
+                   MAX(IFNULL(ta.nombre, 'Sin Abono Activo')) as abono_nombre, 
+                   MAX(IFNULL(ta.clases_por_semana, 0)) as clases_por_semana, 
+                   MAX(ta.categoria) as categoria
             FROM Practicante p
-            JOIN Abono ab ON p.id = ab.practicante_id
-            JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id
-            WHERE ab.estado = 'activo'
-            AND ab.deleted_at IS NULL
-            AND ab.lugar_id = ?
-            AND ab.fecha_inicio <= ?
-            AND ab.fecha_vencimiento >= ?
-            AND (ta.categoria = 'clase' OR ta.categoria = 'cuota_club')
+            LEFT JOIN Abono ab ON p.id = ab.practicante_id AND ab.estado = 'activo' AND ab.deleted_at IS NULL
+            LEFT JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id
+            WHERE p.deleted_at IS NULL
+            GROUP BY p.id, p.nombre_completo
             ORDER BY p.nombre_completo ASC
         `;
-        const [rows] = await pool.execute(sql, [lugarId, fecha, fecha]);
+        const [rows] = await pool.execute(sql);
         return rows;
+    }
+
+    /**
+     * Obtiene la cantidad de asistencias de un practicante en la semana de una fecha dada,
+     * para un abono específico.
+     */
+    static async getWeeklyAttendanceCount(practicanteId, abonoId, fecha) {
+        const sql = `
+            SELECT COUNT(*) as count
+            FROM Asistencia a
+            JOIN Clase c ON a.clase_id = c.id
+            JOIN Abono ab ON a.practicante_id = ab.practicante_id
+            WHERE a.practicante_id = ?
+            AND ab.id = ?
+            AND a.asistio = 1
+            AND YEARWEEK(c.fecha, 1) = YEARWEEK(?, 1)
+            AND c.deleted_at IS NULL
+        `;
+        const [rows] = await pool.execute(sql, [practicanteId, abonoId, fecha]);
+        return rows[0].count;
     }
 }
 

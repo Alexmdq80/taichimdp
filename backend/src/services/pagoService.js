@@ -34,13 +34,19 @@ export class PagoService {
             }
 
             const today = new Date();
-            const fechaPagoStr = extraData.fecha_pago || today.toISOString().split('T')[0];
+            // Use local date for YYYY-MM-DD to avoid UTC shifts
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            const fechaPagoStr = extraData.fecha_pago || todayStr;
 
-            // 1. Determine start date (today or day after existing active abono ends)
+            // 1. Determine start date
             const activeAbono = await Abono.findActiveByPracticanteId(practicanteId, connection);
             let fechaInicio = new Date(today);
+            
+            // For flexible classes (particular/compartida), we don't usually stack by date
+            const isFlexible = (tipoAbono.categoria === 'particular' || tipoAbono.categoria === 'compartida');
 
-            if (activeAbono && new Date(activeAbono.fecha_vencimiento) >= today) {
+            if (!isFlexible && activeAbono && new Date(activeAbono.fecha_vencimiento) >= today) {
                 const existingVencimiento = new Date(activeAbono.fecha_vencimiento);
                 fechaInicio = new Date(existingVencimiento);
                 fechaInicio.setDate(fechaInicio.getDate() + 1);
@@ -52,20 +58,22 @@ export class PagoService {
             if (extraData.fecha_vencimiento) {
                 fechaVencimiento = new Date(extraData.fecha_vencimiento);
             } else {
-                // If it's a "unit-based" class (duration 0), expiration is the same day.
-                // If it's a subscription, multiply duration by quantity.
-                const duracion = tipoAbono.duracion_dias || 30; // Default to 30 if null
+                // If it's a "unit-based" class (duration 0), expiration is the same day as start.
+                const duracion = tipoAbono.duracion_dias !== null ? tipoAbono.duracion_dias : 0;
                 const totalDuracion = duracion * cantidad;
                 
-                // If fechaInicio was set based on previous abono, use that. 
-                // Otherwise use today or provided date.
                 const baseDate = new Date(fechaInicio);
                 baseDate.setDate(baseDate.getDate() + totalDuracion);
                 fechaVencimiento = baseDate;
             }
 
-            const fechaInicioStr = fechaInicio.toISOString().split('T')[0];
-            const fechaVencimientoStr = fechaVencimiento.toISOString().split('T')[0];
+            // Safety check: ensure fechaVencimiento >= fechaInicio to satisfy DB constraint
+            if (fechaVencimiento < fechaInicio) {
+                fechaInicio = new Date(fechaVencimiento);
+            }
+
+            const fechaInicioStr = `${fechaInicio.getFullYear()}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}-${String(fechaInicio.getDate()).padStart(2, '0')}`;
+            const fechaVencimientoStr = `${fechaVencimiento.getFullYear()}-${String(fechaVencimiento.getMonth() + 1).padStart(2, '0')}-${String(fechaVencimiento.getDate()).padStart(2, '0')}`;
 
             // 3. Create Abono record
             const abonoData = {
@@ -86,6 +94,8 @@ export class PagoService {
             const pagoData = {
                 practicante_id: practicanteId,
                 abono_id: newAbono.id, // Linked to the newly created Abono
+                mes_abono: abonoData.mes_abono,
+                lugar_id: abonoData.lugar_id,
                 fecha: fechaPagoStr,
                 monto: (tipoAbono.precio || 0) * cantidad,
                 metodo_pago: metodoPago,

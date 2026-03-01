@@ -11,16 +11,31 @@ export class ClaseForm {
     };
     this.actividades = [];
     this.lugares = [];
+    this.practicantes = [];
   }
 
   async loadInitialData() {
     try {
-      const [actividadesRes, lugaresRes] = await Promise.all([
+      const [actividadesRes, lugaresRes, practicantesRes] = await Promise.all([
         apiClient.get('/actividades'),
-        apiClient.get('/lugares')
+        apiClient.get('/lugares'),
+        apiClient.get('/practicantes?limit=1000') // Load all for reservation
       ]);
       this.actividades = actividadesRes.data;
       this.lugares = lugaresRes.data;
+      this.practicantes = practicantesRes.data || [];
+
+      // If editing, load current attendees to pre-check them
+      this.currentAttendees = [];
+      if (this.options.clase) {
+        try {
+            const res = await apiClient.get(`/asistencia/clases/${this.options.clase.id}/practicantes`);
+            // Filtrar solo los que ya asistieron o están en la lista (que vengan de la tabla Asistencia)
+            this.currentAttendees = res.data.filter(p => p.asistio).map(p => p.id);
+        } catch (e) {
+            console.error('Error loading attendees', e);
+        }
+      }
     } catch (error) {
       displayApiError(error);
     }
@@ -32,13 +47,23 @@ export class ClaseForm {
     const today = new Date().toISOString().split('T')[0];
     
     const c = this.options.clase || {
+      tipo: 'grupal',
       actividad_id: '',
       lugar_id: '',
       fecha: today,
       hora: '18:00',
       hora_fin: '19:00',
-      descripcion: ''
+      observaciones: ''
     };
+
+    // Identify which IDs are parents (have children)
+    const parentIds = new Set(this.lugares.filter(l => l.parent_id).map(l => l.parent_id));
+    
+    // Filter: Show standalone parents (no children) OR children
+    const filteredLugares = this.lugares.filter(l => {
+        const isParentWithChildren = !l.parent_id && parentIds.has(l.id);
+        return !isParentWithChildren;
+    });
 
     this.container.innerHTML = `
       <div class="card">
@@ -47,6 +72,16 @@ export class ClaseForm {
         </div>
         <div class="card-body">
           <form id="clase-form">
+            <div class="form-row">
+              <div class="form-group col-md-12">
+                <label for="tipo">Tipo de Clase</label>
+                <select class="form-control" id="tipo" required>
+                  <option value="grupal" ${c.tipo === 'grupal' ? 'selected' : ''}>Grupal (Horario fijo)</option>
+                  <option value="flexible" ${c.tipo === 'flexible' ? 'selected' : ''}>Particular / Compartida (Horario pautado)</option>
+                </select>
+              </div>
+            </div>
+
             <div class="form-row">
               <div class="form-group col-md-6">
                 <label for="actividad_id">Actividad</label>
@@ -59,7 +94,7 @@ export class ClaseForm {
                 <label for="lugar_id">Lugar / Sede</label>
                 <select class="form-control" id="lugar_id" required>
                   <option value="">Seleccione un lugar</option>
-                  ${this.lugares.map(l => `<option value="${l.id}" ${c.lugar_id == l.id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+                  ${filteredLugares.map(l => `<option value="${l.id}" ${c.lugar_id == l.id ? 'selected' : ''}>${l.nombre}${l.parent_nombre ? ` (${l.parent_nombre})` : ''}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -79,9 +114,26 @@ export class ClaseForm {
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="descripcion">Descripción / Notas</label>
-              <textarea class="form-control" id="descripcion" rows="2" placeholder="Opcional">${c.descripcion || ''}</textarea>
+            <!-- Reservación para flexibles -->
+            <div id="reservation-section" class="${c.tipo === 'grupal' ? 'd-none' : ''}">
+                <hr>
+                <label><strong>Alumnos que reservaron esta clase</strong></label>
+                <div class="practicantes-selection card p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+                    ${this.practicantes.map(p => {
+                        const isChecked = this.currentAttendees && this.currentAttendees.includes(p.id);
+                        return `
+                        <div class="form-check">
+                            <input class="form-check-input student-reservation" type="checkbox" value="${p.id}" id="p-${p.id}" ${isChecked ? 'checked' : ''}>
+                            <label class="form-check-label" for="p-${p.id}">${p.nombre_completo}</label>
+                        </div>
+                    `}).join('')}
+                </div>
+                <small class="text-muted">Los seleccionados aparecerán en la lista de asistencia de esta clase.</small>
+            </div>
+
+            <div class="form-group mt-3">
+              <label for="observaciones">Descripción / Notas</label>
+              <textarea class="form-control" id="observaciones" rows="2" placeholder="Opcional">${c.observaciones || c.descripcion || ''}</textarea>
             </div>
 
             <div class="form-actions mt-4">
@@ -98,34 +150,52 @@ export class ClaseForm {
 
   attachEvents() {
     const form = this.container.querySelector('#clase-form');
+    const tipoSelect = this.container.querySelector('#tipo');
+    const reservationSection = this.container.querySelector('#reservation-section');
+
+    tipoSelect.addEventListener('change', () => {
+        if (tipoSelect.value === 'grupal') {
+            reservationSection.classList.add('d-none');
+        } else {
+            reservationSection.classList.remove('d-none');
+        }
+    });
+
+    this.container.querySelector('#cancel-clase-btn').addEventListener('click', () => {
+        this.options.onCancel();
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      const reservedStudents = Array.from(this.container.querySelectorAll('.student-reservation:checked'))
+                                    .map(cb => parseInt(cb.value, 10));
+
       const formData = {
+        tipo: tipoSelect.value,
         actividad_id: parseInt(this.container.querySelector('#actividad_id').value, 10),
         lugar_id: parseInt(this.container.querySelector('#lugar_id').value, 10),
         fecha: this.container.querySelector('#fecha').value,
         hora: this.container.querySelector('#hora').value,
         hora_fin: this.container.querySelector('#hora_fin').value,
-        descripcion: this.container.querySelector('#descripcion').value
+        observaciones: this.container.querySelector('#observaciones').value,
+        practicantes_reservados: reservedStudents
       };
 
       try {
         if (this.options.clase) {
-          // No implementamos PUT /clases aún en backend, pero podríamos
-          alert('Edición no implementada aún en backend');
+          await apiClient.put(`/asistencia/clases/${this.options.clase.id}`, formData);
+          showSuccess('Sesión de clase actualizada');
         } else {
           await apiClient.post('/asistencia/clases', formData);
-          showSuccess('Clase creada con éxito');
+          showSuccess('Sesión de clase creada exitosamente');
         }
         this.options.onSuccess();
       } catch (error) {
         displayApiError(error);
       }
     });
-
-    this.container.querySelector('#cancel-clase-btn').addEventListener('click', () => {
-      this.options.onCancel();
-    });
   }
 }
+
+export default ClaseForm;

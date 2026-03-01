@@ -30,6 +30,7 @@ export class HorarioForm {
     await this.loadInitialData();
     const isEdit = !!this.options.horario;
     const h = this.options.horario || {
+      tipo: 'grupal',
       actividad_id: '',
       lugar_id: '',
       dia_semana: 1, // Lunes por defecto
@@ -38,6 +39,15 @@ export class HorarioForm {
       activo: true
     };
 
+    // Identify which IDs are parents (have children)
+    const parentIds = new Set(this.lugares.filter(l => l.parent_id).map(l => l.parent_id));
+    
+    // Filter: Show standalone parents (no children) OR children
+    const filteredLugares = this.lugares.filter(l => {
+        const isParentWithChildren = !l.parent_id && parentIds.has(l.id);
+        return !isParentWithChildren;
+    });
+
     this.container.innerHTML = `
       <div class="card">
         <div class="card-header">
@@ -45,6 +55,16 @@ export class HorarioForm {
         </div>
         <div class="card-body">
           <form id="horario-form">
+            <div class="form-row">
+              <div class="form-group col-md-12">
+                <label for="tipo">Tipo de Clase para este Horario</label>
+                <select class="form-control" id="tipo" required>
+                  <option value="grupal" ${h.tipo === 'grupal' ? 'selected' : ''}>Grupal (Horario fijo)</option>
+                  <option value="flexible" ${h.tipo === 'flexible' ? 'selected' : ''}>Particular/Compartida (Horario pautado)</option>
+                </select>
+              </div>
+            </div>
+
             <div class="form-row">
               <div class="form-group col-md-6">
                 <label for="actividad_id">Actividad</label>
@@ -57,7 +77,7 @@ export class HorarioForm {
                 <label for="lugar_id">Lugar / Sede</label>
                 <select class="form-control" id="lugar_id" required>
                   <option value="">Seleccione un lugar</option>
-                  ${this.lugares.map(l => `<option value="${l.id}" ${h.lugar_id == l.id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+                  ${filteredLugares.map(l => `<option value="${l.id}" ${h.lugar_id == l.id ? 'selected' : ''}>${l.nombre}${l.parent_nombre ? ` (${l.parent_nombre})` : ''}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -110,6 +130,7 @@ export class HorarioForm {
       e.preventDefault();
       
       const formData = {
+        tipo: this.container.querySelector('#tipo').value,
         actividad_id: parseInt(this.container.querySelector('#actividad_id').value, 10),
         lugar_id: parseInt(this.container.querySelector('#lugar_id').value, 10),
         dia_semana: parseInt(this.container.querySelector('#dia_semana').value, 10),
@@ -137,3 +158,5 @@ export class HorarioForm {
     });
   }
 }
+
+export default HorarioForm;

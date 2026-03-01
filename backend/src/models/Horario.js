@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 export class Horario {
     constructor(data) {
         this.id = data.id || null;
+        this.tipo = data.tipo || 'grupal';
         this.actividad_id = data.actividad_id;
         this.lugar_id = data.lugar_id;
         this.dia_semana = data.dia_semana;
@@ -42,9 +43,12 @@ export class Horario {
         }
         if (filters.activo !== undefined && filters.activo !== '') {
             sql += ' AND h.activo = ?';
-            // Handle both boolean (from service) and string/number (from query params)
             const isActive = (filters.activo === true || filters.activo === 'true' || filters.activo == 1);
             params.push(isActive ? 1 : 0);
+        }
+        if (filters.tipo && filters.tipo !== '') {
+            sql += ' AND h.tipo = ?';
+            params.push(filters.tipo);
         }
 
         sql += ' ORDER BY h.dia_semana, h.hora_inicio';
@@ -67,10 +71,11 @@ export class Horario {
 
     static async create(data, userId = null) {
         const sql = `
-            INSERT INTO Horario (actividad_id, lugar_id, dia_semana, hora_inicio, hora_fin, activo)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO Horario (tipo, actividad_id, lugar_id, dia_semana, hora_inicio, hora_fin, activo)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         const values = [
+            data.tipo || 'grupal',
             data.actividad_id,
             data.lugar_id,
             data.dia_semana,
@@ -95,10 +100,11 @@ export class Horario {
 
         const sql = `
             UPDATE Horario 
-            SET actividad_id = ?, lugar_id = ?, dia_semana = ?, hora_inicio = ?, hora_fin = ?, activo = ?
+            SET tipo = ?, actividad_id = ?, lugar_id = ?, dia_semana = ?, hora_inicio = ?, hora_fin = ?, activo = ?
             WHERE id = ? AND deleted_at IS NULL
         `;
         const values = [
+            data.tipo || current.tipo,
             data.actividad_id || current.actividad_id,
             data.lugar_id || current.lugar_id,
             data.dia_semana !== undefined ? data.dia_semana : current.dia_semana,
@@ -165,6 +171,7 @@ export class Horario {
     toJSON() {
         return {
             id: this.id,
+            tipo: this.tipo,
             actividad_id: this.actividad_id,
             lugar_id: this.lugar_id,
             dia_semana: this.dia_semana,

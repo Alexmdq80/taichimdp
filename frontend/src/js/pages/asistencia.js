@@ -59,6 +59,17 @@ export class AsistenciaPage {
 
   async renderView() {
     const content = this.container.querySelector('#asistencia-content');
+    const filtersBar = this.container.querySelector('.filters-bar');
+    const headerActions = this.container.querySelector('.page-header .actions');
+    
+    // Toggle visibility based on view
+    if (this.currentView === 'list') {
+      filtersBar.style.display = 'block';
+      headerActions.style.display = 'flex';
+    } else {
+      filtersBar.style.display = 'none';
+      headerActions.style.display = 'none';
+    }
     
     if (this.currentView === 'list') {
       content.innerHTML = '<div class="loader text-center p-5">Cargando sesiones de clase...</div>';

@@ -14,6 +14,13 @@ export class ClaseList {
     this.clases = clases;
   }
 
+  formatTipo(tipo) {
+    if (tipo === 'grupal') {
+        return 'Grupal (Horario fijo)';
+    }
+    return 'Particular/Compartida (Horario flexible)';
+  }
+
   render() {
     const statusBadges = {
       'programada': 'badge-info',
@@ -28,6 +35,7 @@ export class ClaseList {
           <thead>
             <tr>
               <th>Fecha</th>
+              <th>Tipo</th>
               <th>Horario</th>
               <th>Actividad</th>
               <th>Lugar</th>
@@ -37,10 +45,15 @@ export class ClaseList {
             </tr>
           </thead>
           <tbody>
-            ${this.clases.length === 0 ? '<tr><td colspan="7" class="text-center">No hay clases registradas en este periodo</td></tr>' : ''}
+            ${this.clases.length === 0 ? '<tr><td colspan="8" class="text-center">No hay clases registradas en este periodo</td></tr>' : ''}
             ${this.clases.map(c => `
               <tr class="${c.estado === 'cancelada' || c.estado === 'suspendida' ? 'table-light text-muted' : ''}">
                 <td><strong>${formatDate(c.fecha)}</strong></td>
+                <td>
+                    <span class="badge ${c.tipo === 'grupal' ? 'badge-primary' : 'badge-info'}">
+                        ${this.formatTipo(c.tipo)}
+                    </span>
+                </td>
                 <td>${c.hora.substring(0, 5)} - ${c.hora_fin.substring(0, 5)}</td>
                 <td>${c.actividad_nombre}</td>
                 <td>${c.lugar_nombre}</td>
@@ -93,3 +106,5 @@ export class ClaseList {
     });
   }
 }
+
+export default ClaseList;

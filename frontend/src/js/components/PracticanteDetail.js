@@ -134,7 +134,7 @@ export class PracticanteDetail {
                 `).join('')}
               </select>
             </div>
-            <div class="form-group">
+            <div id="cantidad-group" class="form-group">
                 <label for="cantidad-input">Cantidad:</label>
                 <input type="number" id="cantidad-input" name="cantidad" value="1" min="1" required />
             </div>
@@ -143,9 +143,13 @@ export class PracticanteDetail {
                 <label for="lugar-id-select">Lugar:</label>
                 <select id="lugar-id-select" name="lugar_id">
                     <option value="">-- Seleccione un lugar --</option>
-                    ${this.lugares.map(l => `
-                        <option value="${l.id}">${l.nombre}</option>
-                    `).join('')}
+                    ${(() => {
+                        const parentIds = new Set(this.lugares.filter(l => l.parent_id).map(l => l.parent_id));
+                        return this.lugares
+                            .filter(l => !(!l.parent_id && parentIds.has(l.id)))
+                            .map(l => `<option value="${l.id}">${l.nombre}${l.parent_nombre ? ` (${l.parent_nombre})` : ''}</option>`)
+                            .join('');
+                    })()}
                 </select>
             </div>
             
@@ -315,12 +319,26 @@ export class PracticanteDetail {
     const detailsDiv = this.container.querySelector('#selected-abono-details');
     const mesAbonoGroup = this.container.querySelector('#mes-abono-group');
     const fechaVencimientoInput = this.container.querySelector('#fecha-vencimiento-input');
+    const fechaVencimientoGroup = fechaVencimientoInput.closest('.form-group');
     const lugarSelect = this.container.querySelector('#lugar-id-select');
+    const cantidadGroup = this.container.querySelector('#cantidad-group');
 
     if (selectedOption && selectedOption.value) {
-        const duracion = parseInt(selectedOption.getAttribute('data-duracion'), 10);
+        const duracionAttr = selectedOption.getAttribute('data-duracion');
+        const duracion = (duracionAttr === 'null' || duracionAttr === '') ? null : parseInt(duracionAttr, 10);
         const precioUnitario = parseFloat(selectedOption.getAttribute('data-precio'));
         const lugarDefaultId = selectedOption.getAttribute('data-lugar-id');
+        const categoria = selectedOption.getAttribute('data-categoria');
+        const isFlexible = (categoria === 'particular' || categoria === 'compartida');
+        
+        // Hide quantity for group classes
+        if (categoria === 'grupal') {
+            cantidadGroup.style.display = 'none';
+            cantidadInput.value = 1;
+        } else {
+            cantidadGroup.style.display = 'block';
+        }
+
         const cantidad = parseInt(cantidadInput.value, 10) || 1;
         
         if (lugarSelect) {
@@ -329,30 +347,37 @@ export class PracticanteDetail {
 
         const totalPrecio = precioUnitario * cantidad;
         
-        let duracionText = '';
-        if (duracion === 0) {
-            duracionText = cantidad === 1 ? '1 Clase' : `${cantidad} Clases`;
-            mesAbonoGroup.style.display = 'none';
-        } else {
-            duracionText = `${duracion * cantidad} días totales (${cantidad} períodos de ${duracion} días)`;
+        // Show mes_abono only for group classes
+        if (categoria === 'grupal') {
             mesAbonoGroup.style.display = 'block';
+        } else {
+            mesAbonoGroup.style.display = 'none';
         }
 
-        // Calculate default expiration date
-        const today = new Date();
-        const expirationDate = new Date(today);
-        expirationDate.setDate(expirationDate.getDate() + (duracion * cantidad));
-        
-        // Format to YYYY-MM-DD for input
-        const yyyy = expirationDate.getFullYear();
-        const mm = String(expirationDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(expirationDate.getDate()).padStart(2, '0');
-        fechaVencimientoInput.value = `${yyyy}-${mm}-${dd}`;
+        let duracionText = '';
+        if (isFlexible) {
+            fechaVencimientoGroup.style.display = 'none';
+            fechaVencimientoInput.value = '2099-12-31'; // Future date for DB but UI is hidden
+            duracionText = ''; // No duration text for flexible
+        } else if (duracion === 0) {
+            duracionText = `<p><strong>Duración Sugerida:</strong> ${cantidad === 1 ? '1 Clase' : `${cantidad} Clases`}</p>`;
+            fechaVencimientoGroup.style.display = 'block';
+            
+            const exp = new Date();
+            fechaVencimientoInput.value = exp.toISOString().split('T')[0];
+        } else {
+            duracionText = `<p><strong>Duración Sugerida:</strong> ${duracion * cantidad} días totales (${cantidad} períodos de ${duracion} días)</p>`;
+            fechaVencimientoGroup.style.display = 'block';
+
+            const expirationDate = new Date();
+            expirationDate.setDate(expirationDate.getDate() + (duracion * cantidad));
+            fechaVencimientoInput.value = expirationDate.toISOString().split('T')[0];
+        }
 
         detailsDiv.innerHTML = `
             <p><strong>Precio Unitario:</strong> $${precioUnitario.toFixed(2)}</p>
             <p><strong>Cantidad:</strong> ${cantidad}</p>
-            <p><strong>Duración Sugerida:</strong> ${duracionText}</p>
+            ${duracionText}
             <hr>
             <p style="font-size: 1.2rem; color: var(--primary-color);"><strong>Total a Pagar: $${totalPrecio.toFixed(2)}</strong></p>
         `;
@@ -391,6 +416,17 @@ export class PracticanteDetail {
     const notasTextarea = paymentForm.querySelector('#notas-textarea');
     const errorMessageElement = paymentForm.querySelector('#payment-error-message');
 
+    const selectedOption = tipoAbonoSelect.options[tipoAbonoSelect.selectedIndex];
+    if (!selectedOption || !tipoAbonoSelect.value) {
+        errorMessageElement.textContent = 'Por favor, seleccione un tipo de abono.';
+        errorMessageElement.style.display = 'block';
+        return;
+    }
+
+    const categoria = selectedOption.getAttribute('data-categoria');
+    const duracion = selectedOption.getAttribute('data-duracion');
+    const isFlexible = (categoria === 'particular' || categoria === 'compartida');
+
     const tipo_abono_id = tipoAbonoSelect.value;
     const cantidad = cantidadInput.value;
     const mes_abono = mesAbonoSelect.value;
@@ -400,8 +436,9 @@ export class PracticanteDetail {
     const metodo_pago = metodoPagoSelect.value;
     const notas = notasTextarea.value;
 
-    if (!tipo_abono_id) {
-        errorMessageElement.textContent = 'Por favor, seleccione un tipo de abono.';
+    // Validation: lugar_id is required for flexible classes
+    if (isFlexible && !lugar_id) {
+        errorMessageElement.textContent = 'El lugar es obligatorio para clases particulares o compartidas.';
         errorMessageElement.style.display = 'block';
         return;
     }
@@ -409,19 +446,21 @@ export class PracticanteDetail {
     errorMessageElement.style.display = 'none';
 
     try {
+        const payload = { 
+            tipo_abono_id: parseInt(tipo_abono_id, 10), 
+            cantidad: parseInt(cantidad, 10),
+            mes_abono: (categoria === 'grupal') ? mes_abono : null,
+            fecha_vencimiento,
+            fecha_pago,
+            lugar_id: lugar_id ? parseInt(lugar_id, 10) : null,
+            metodo_pago, 
+            notas 
+        };
+
         await makeRequest(
             `/practicantes/${this.practicante.id}/pagar`,
             'POST',
-            { 
-                tipo_abono_id: parseInt(tipo_abono_id, 10), 
-                cantidad: parseInt(cantidad, 10),
-                mes_abono: (tipoAbonoSelect.options[tipoAbonoSelect.selectedIndex].getAttribute('data-duracion') !== '0') ? mes_abono : null,
-                fecha_vencimiento,
-                fecha_pago,
-                lugar_id: lugar_id ? parseInt(lugar_id, 10) : null,
-                metodo_pago, 
-                notas 
-            }, 
+            payload, 
             true
         );
         showSuccess('Pago registrado correctamente.', this.container);
@@ -463,12 +502,13 @@ export class PracticanteDetail {
                     <tbody>
                         ${pagos.map(pago => {
                             const mesText = pago.mes_abono ? ` (${pago.mes_abono})` : '';
+                            const isVencimientoReal = pago.fecha_vencimiento && !pago.fecha_vencimiento.startsWith('2099');
                             return `
                                 <tr>
                                     <td>${this.escapeHtml(pago.tipo_abono_nombre || 'Desconocido')}${mesText}</td>
                                     <td>$${parseFloat(pago.monto).toFixed(2)}</td>
                                     <td>${formatDateReadable(pago.fecha)}</td>
-                                    <td>${pago.fecha_vencimiento ? formatDateReadable(pago.fecha_vencimiento) : '-'}</td>
+                                    <td>${isVencimientoReal ? formatDateReadable(pago.fecha_vencimiento) : '<em class="text-muted">Flexible</em>'}</td>
                                     <td>${this.escapeHtml(pago.lugar_nombre || '-')}</td>
                                     <td>${pago.metodo_pago || '-'}</td>
                                     <td>

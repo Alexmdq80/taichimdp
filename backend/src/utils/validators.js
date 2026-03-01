@@ -173,6 +173,29 @@ export function validateTipoAbono(data) {
         }
     }
 
+    // Validate clases_por_semana
+    if (data.clases_por_semana !== undefined && data.clases_por_semana !== null && data.clases_por_semana !== '') {
+        const count = parseInt(data.clases_por_semana, 10);
+        if (isNaN(count) || count <= 0) {
+            errors.push({ field: 'clases_por_semana', message: 'Clases por semana must be a positive integer' });
+        }
+    }
+
+    // Validate max_personas
+    if (data.max_personas !== undefined && data.max_personas !== null && data.max_personas !== '') {
+        const max = parseInt(data.max_personas, 10);
+        if (isNaN(max) || max <= 0) {
+            errors.push({ field: 'max_personas', message: 'Capacidad de personas must be a positive integer' });
+        }
+    }
+
+    // Validate horarios
+    if (data.horarios !== undefined && data.horarios !== null) {
+        if (!Array.isArray(data.horarios)) {
+            errors.push({ field: 'horarios', message: 'Horarios must be an array' });
+        }
+    }
+
     if (errors.length > 0) {
         throw new ValidationError('Validation failed', errors);
     }

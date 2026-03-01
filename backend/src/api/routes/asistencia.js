@@ -20,29 +20,115 @@ router.get('/clases/:id/practicantes', asyncHandler(async (req, res) => {
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
 
-    // 1. Obtener elegibles (quienes tienen abono activo)
-    const elegibles = await Asistencia.getEligiblePracticantes(
-        clase.actividad_id, 
-        clase.lugar_id, 
-        clase.fecha
-    );
+    // Permitir sobrescribir el estado para chequear elegibilidad (útil para el frontend al cambiar el selector)
+    if (req.query.estado) {
+        clase.estado = req.query.estado;
+    }
+
+    // 1. Obtener elegibles
+    const elegibles = await Asistencia.getEligiblePracticantes(clase);
 
     // 2. Obtener quienes ya tienen asistencia marcada
     const asistenciaActual = await Asistencia.findByClase(id);
     const asistieronMap = new Map(asistenciaActual.map(a => [a.practicante_id, a.asistio]));
 
-    // 3. Cruzar datos
-    const data = elegibles.map(p => ({
-        ...p,
-        asistio: asistieronMap.has(p.id) ? asistieronMap.get(p.id) : false
+    // 3. Cruzar datos y obtener conteo semanal
+    const data = await Promise.all(elegibles.map(async (p) => {
+        const asistio = asistieronMap.has(p.id) ? asistieronMap.get(p.id) : false;
+        
+        // Solo contamos si no ha marcado asistencia en ESTA clase específica todavía (para evitar doble conteo si ya asistió)
+        // O si ya marcó, restamos 1 para el mensaje de advertencia si fuera necesario, 
+        // pero es más simple obtener el conteo actual excluyendo esta clase si queremos saber el estado PREVIO.
+        const weeklyCount = await Asistencia.getWeeklyAttendanceCount(p.id, p.abono_id, clase.fecha);
+        
+        return {
+            ...p,
+            asistio,
+            asistencias_esta_semana: weeklyCount
+        };
     }));
 
     res.json({ data });
 }));
 
 /**
+ * POST /api/asistencia/clases/:id/practicantes
+ * Updates attendance for multiple practitioners at once for a specific class.
+ */
+router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const { updates } = req.body;
+
+    const clase = await Clase.findById(id);
+    if (!clase) throw new AppError('Clase no encontrada', 404);
+
+    // RESTRICTION: Check state based on class type
+    if (clase.tipo === 'grupal') {
+        if (clase.estado !== 'realizada') {
+            throw new AppError('Solo se puede marcar asistencia en clases grupales con estado "Realizada"', 400);
+        }
+    } else {
+        if (clase.estado !== 'programada' && clase.estado !== 'realizada') {
+            throw new AppError('Solo se puede marcar asistencia en clases particulares/compartidas con estado "Programada" o "Realizada"', 400);
+        }
+    }
+
+    if (updates && Array.isArray(updates)) {
+        for (const u of updates) {
+            await Asistencia.upsert({
+                clase_id: id,
+                practicante_id: u.practicante_id,
+                asistio: u.asistio
+            });
+        }
+    }
+
+    res.json({ message: 'Asistencia actualizada con éxito' });
+}));
+
+/**
+ * PUT /api/asistencia/clases/:id
+ * Updates class information (estado, observaciones, etc.)
+ */
+router.put('/clases/:id', asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const data = req.body;
+
+    const clase = await Clase.findById(id);
+    if (!clase) throw new AppError('Clase no encontrada', 404);
+
+    // Clean dates/times to avoid ISO strings or invalid MySQL formats
+    const cleanFecha = data.fecha ? (typeof data.fecha === 'string' && data.fecha.includes('T') ? data.fecha.split('T')[0] : data.fecha) : clase.fecha;
+    const cleanHora = data.hora ? (typeof data.hora === 'string' && data.hora.length > 8 ? data.hora.substring(0, 8) : data.hora) : clase.hora;
+    const cleanHoraFin = data.hora_fin ? (typeof data.hora_fin === 'string' && data.hora_fin.length > 8 ? data.hora_fin.substring(0, 8) : data.hora_fin) : clase.hora_fin;
+
+    // RESTRICTION: Only allow marking as "realizada" if class date/time has passed
+    if (data.estado === 'realizada') {
+        const classDateTime = new Date(`${cleanFecha}T${cleanHora}`);
+        const now = new Date();
+        
+        if (now < classDateTime) {
+            throw new AppError('No se puede marcar la clase como realizada antes de su fecha y hora de inicio', 400);
+        }
+    }
+
+    const updatedClase = await Clase.update(id, {
+        tipo: data.tipo || clase.tipo,
+        estado: data.estado || clase.estado,
+        motivo_cancelacion: data.motivo_cancelacion !== undefined ? data.motivo_cancelacion : clase.motivo_cancelacion,
+        observaciones: data.observaciones !== undefined ? data.observaciones : clase.observaciones,
+        fecha: cleanFecha,
+        hora: cleanHora,
+        hora_fin: cleanHoraFin
+    });
+
+    res.json({ data: updatedClase.toJSON() });
+}));
+
+/**
  * POST /api/asistencia/clases/:id/registrar
  * Registra la asistencia de múltiples practicantes a la vez y actualiza el estado de la clase.
+ * (This route is legacy/alternative, but let's keep it consistent).
  */
 router.post('/clases/:id/registrar', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
@@ -51,7 +137,30 @@ router.post('/clases/:id/registrar', asyncHandler(async (req, res) => {
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
 
-    // 1. Actualizar datos de la clase
+    // 1. Validar si se está cambiando a "realizada"
+    if (estado === 'realizada') {
+        const classDateTime = new Date(`${clase.fecha}T${clase.hora}`);
+        const now = new Date();
+        if (now < classDateTime) {
+            throw new AppError('No se puede marcar la clase como realizada antes de su fecha y hora de inicio', 400);
+        }
+    }
+
+    // 2. Validar si se está marcando asistencia según el tipo y estado
+    if (asistencias && asistencias.length > 0) {
+        const targetEstado = estado || clase.estado;
+        if (clase.tipo === 'grupal') {
+            if (targetEstado !== 'realizada') {
+                throw new AppError('Solo se puede marcar asistencia en clases grupales con estado "Realizada"', 400);
+            }
+        } else {
+            if (targetEstado !== 'programada' && targetEstado !== 'realizada') {
+                throw new AppError('Solo se puede marcar asistencia en clases particulares/compartidas con estado "Programada" o "Realizada"', 400);
+            }
+        }
+    }
+
+    // 3. Actualizar datos de la clase
     const updateData = {
         estado: estado || (asistencias && asistencias.length > 0 ? 'realizada' : clase.estado),
         observaciones: observaciones !== undefined ? observaciones : clase.observaciones,
@@ -62,8 +171,8 @@ router.post('/clases/:id/registrar', asyncHandler(async (req, res) => {
     };
     await Clase.update(id, updateData);
 
-    // 2. Registrar asistencias si la clase no está cancelada/suspendida
-    if (asistencias && Array.isArray(asistencias) && updateData.estado !== 'cancelada' && updateData.estado !== 'suspendida') {
+    // 4. Registrar asistencias
+    if (asistencias && Array.isArray(asistencias)) {
         for (const a of asistencias) {
             await Asistencia.upsert({
                 clase_id: id,
@@ -96,7 +205,7 @@ router.post('/clases/generar', asyncHandler(async (req, res) => {
 }));
 
 /**
- * GET /api/clases
+ * GET /api/asistencia/clases
  * Get sessions list with filters
  */
 router.get('/clases', asyncHandler(async (req, res) => {
@@ -111,7 +220,7 @@ router.get('/clases', asyncHandler(async (req, res) => {
 }));
 
 /**
- * GET /api/clases/:id
+ * GET /api/asistencia/clases/:id
  * Get specific session by ID
  */
 router.get('/clases/:id', asyncHandler(async (req, res) => {
@@ -122,7 +231,7 @@ router.get('/clases/:id', asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/clases
+ * POST /api/asistencia/clases
  * Create a new specific session (instance)
  */
 router.post('/clases', asyncHandler(async (req, res) => {
@@ -133,12 +242,29 @@ router.post('/clases', asyncHandler(async (req, res) => {
         throw new AppError('Todos los campos son obligatorios (actividad, lugar, fecha, hora inicio, hora fin)', 400);
     }
 
+    // Clean data format
+    if (typeof data.fecha === 'string' && data.fecha.includes('T')) data.fecha = data.fecha.split('T')[0];
+    if (typeof data.hora === 'string' && data.hora.length > 8) data.hora = data.hora.substring(0, 8);
+    if (typeof data.hora_fin === 'string' && data.hora_fin.length > 8) data.hora_fin = data.hora_fin.substring(0, 8);
+
     const clase = await Clase.create(data);
+
+    // Si hay alumnos reservados (para clases particulares/compartidas), los registramos en la asistencia
+    if (data.practicantes_reservados && Array.isArray(data.practicantes_reservados)) {
+        for (const practicanteId of data.practicantes_reservados) {
+            await Asistencia.upsert({
+                clase_id: clase.id,
+                practicante_id: practicanteId,
+                asistio: 1
+            });
+        }
+    }
+
     res.status(201).json({ data: clase.toJSON() });
 }));
 
 /**
- * DELETE /api/clases/:id
+ * DELETE /api/asistencia/clases/:id
  * Delete (soft-delete) a specific session
  */
 router.delete('/clases/:id', asyncHandler(async (req, res) => {

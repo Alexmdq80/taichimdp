@@ -10,9 +10,12 @@ export class TipoAbono {
         this.descripcion = data.descripcion !== undefined ? data.descripcion : null;
         this.duracion_dias = data.duracion_dias !== undefined ? data.duracion_dias : null;
         this.precio = data.precio !== undefined ? data.precio : null;
-        this.categoria = data.categoria || 'clase';
+        this.clases_por_semana = data.clases_por_semana !== undefined ? data.clases_por_semana : 1;
+        this.max_personas = data.max_personas !== undefined ? data.max_personas : 1;
+        this.categoria = data.categoria || 'grupal';
         this.lugar_id = data.lugar_id || null;
         this.lugar_nombre = data.lugar_nombre || null; // From join
+        this.horarios = data.horarios || []; // Array of horario IDs
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
@@ -25,29 +28,52 @@ export class TipoAbono {
      * @returns {Promise<TipoAbono>}
      */
     static async create(data, userId = null) {
-        const sql = `
-            INSERT INTO TipoAbono (
-                nombre, descripcion, duracion_dias, precio, categoria, lugar_id
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        `;
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        const values = [
-            data.nombre,
-            data.descripcion !== undefined ? data.descripcion : null,
-            data.duracion_dias !== undefined ? data.duracion_dias : null,
-            data.precio !== undefined ? data.precio : null,
-            data.categoria || 'clase',
-            data.lugar_id || null
-        ];
+            const sql = `
+                INSERT INTO TipoAbono (
+                    nombre, descripcion, duracion_dias, precio, clases_por_semana, max_personas, categoria, lugar_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
 
-        const [result] = await pool.execute(sql, values);
-        const newTipoAbono = await this.findById(result.insertId);
+            const values = [
+                data.nombre,
+                data.descripcion !== undefined ? data.descripcion : null,
+                data.duracion_dias !== undefined ? data.duracion_dias : null,
+                data.precio !== undefined ? data.precio : null,
+                data.clases_por_semana !== undefined ? data.clases_por_semana : 1,
+                data.max_personas !== undefined ? data.max_personas : 1,
+                data.categoria || 'grupal',
+                data.lugar_id || null
+            ];
 
-        if (newTipoAbono) {
-            await this.recordHistory(newTipoAbono.id, 'CREATE', null, newTipoAbono.toJSON(), userId);
+            const [result] = await connection.execute(sql, values);
+            const tipoAbonoId = result.insertId;
+
+            // Associate with schedules if provided
+            if (data.horarios && Array.isArray(data.horarios) && data.horarios.length > 0) {
+                const scheduleSql = `INSERT INTO TipoAbono_Horario (tipo_abono_id, horario_id) VALUES (?, ?)`;
+                for (const horarioId of data.horarios) {
+                    await connection.execute(scheduleSql, [tipoAbonoId, horarioId]);
+                }
+            }
+
+            await connection.commit();
+            const newTipoAbono = await this.findById(tipoAbonoId);
+
+            if (newTipoAbono) {
+                await this.recordHistory(newTipoAbono.id, 'CREATE', null, newTipoAbono.toJSON(), userId);
+            }
+
+            return newTipoAbono;
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-
-        return newTipoAbono;
     }
 
     /**
@@ -58,7 +84,8 @@ export class TipoAbono {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT ta.*, l.nombre as lugar_nombre
+            SELECT ta.*, l.nombre as lugar_nombre,
+            (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as horarios_ids
             FROM TipoAbono ta
             LEFT JOIN Lugar l ON ta.lugar_id = l.id
             WHERE ta.id = ? AND ta.deleted_at IS NULL
@@ -70,7 +97,11 @@ export class TipoAbono {
             return null;
         }
 
-        return new TipoAbono(rows[0]);
+        const data = rows[0];
+        // Parse JSON array from DB if exists
+        data.horarios = typeof data.horarios_ids === 'string' ? JSON.parse(data.horarios_ids) : (data.horarios_ids || []);
+        
+        return new TipoAbono(data);
     }
 
     /**
@@ -79,14 +110,18 @@ export class TipoAbono {
      */
     static async findAll() {
         const sql = `
-            SELECT ta.*, l.nombre as lugar_nombre
+            SELECT ta.*, l.nombre as lugar_nombre,
+            (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as horarios_ids
             FROM TipoAbono ta
             LEFT JOIN Lugar l ON ta.lugar_id = l.id
             WHERE ta.deleted_at IS NULL
             ORDER BY ta.nombre ASC
         `;
         const [rows] = await pool.execute(sql);
-        return rows.map(row => new TipoAbono(row));
+        return rows.map(row => {
+            row.horarios = typeof row.horarios_ids === 'string' ? JSON.parse(row.horarios_ids) : (row.horarios_ids || []);
+            return new TipoAbono(row);
+        });
     }
 
     /**
@@ -100,39 +135,61 @@ export class TipoAbono {
         const currentData = await this.findById(id);
         if (!currentData) return null;
 
-        const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'categoria', 'lugar_id'];
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        const updates = [];
-        const values = [];
+            const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'clases_por_semana', 'max_personas', 'categoria', 'lugar_id'];
+            const updates = [];
+            const values = [];
 
-        for (const field of allowedFields) {
-            if (data.hasOwnProperty(field)) {
-                updates.push(`${field} = ?`);
-                values.push(data[field] !== undefined ? data[field] : null);
+            for (const field of allowedFields) {
+                if (data.hasOwnProperty(field)) {
+                    updates.push(`${field} = ?`);
+                    values.push(data[field] !== undefined ? data[field] : null);
+                }
             }
+
+            if (updates.length > 0) {
+                values.push(id);
+                const sql = `UPDATE TipoAbono SET ${updates.join(', ')} WHERE id = ?`;
+                await connection.execute(sql, values);
+            }
+
+            // Update schedules if provided
+            if (data.horarios && Array.isArray(data.horarios)) {
+                // Remove existing associations
+                await connection.execute('DELETE FROM TipoAbono_Horario WHERE tipo_abono_id = ?', [id]);
+                
+                // Add new associations
+                if (data.horarios.length > 0) {
+                    const scheduleSql = `INSERT INTO TipoAbono_Horario (tipo_abono_id, horario_id) VALUES (?, ?)`;
+                    for (const horarioId of data.horarios) {
+                        await connection.execute(scheduleSql, [id, horarioId]);
+                    }
+                }
+            }
+
+            await connection.commit();
+            const updatedTipoAbono = await this.findById(id);
+
+            if (updatedTipoAbono) {
+                await this.recordHistory(
+                    id,
+                    'UPDATE',
+                    currentData.toJSON(),
+                    updatedTipoAbono.toJSON(),
+                    userId
+                );
+            }
+
+            return updatedTipoAbono;
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-
-        if (updates.length === 0) {
-            return currentData;
-        }
-
-        values.push(id);
-        const sql = `UPDATE TipoAbono SET ${updates.join(', ')} WHERE id = ?`;
-
-        await pool.execute(sql, values);
-        const updatedTipoAbono = await this.findById(id);
-
-        if (updatedTipoAbono) {
-            await this.recordHistory(
-                id,
-                'UPDATE',
-                currentData.toJSON(),
-                updatedTipoAbono.toJSON(),
-                userId
-            );
-        }
-
-        return updatedTipoAbono;
     }
 
     /**
@@ -215,9 +272,12 @@ export class TipoAbono {
             descripcion: this.descripcion,
             duracion_dias: this.duracion_dias,
             precio: this.precio,
+            clases_por_semana: this.clases_por_semana,
+            max_personas: this.max_personas,
             categoria: this.categoria,
             lugar_id: this.lugar_id,
             lugar_nombre: this.lugar_nombre,
+            horarios: this.horarios,
             created_at: this.created_at,
             updated_at: this.updated_at,
             deleted_at: this.deleted_at

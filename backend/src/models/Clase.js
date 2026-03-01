@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 export class Clase {
     constructor(data) {
         this.id = data.id || null;
+        this.tipo = data.tipo || 'grupal';
         this.horario_id = data.horario_id || null;
         this.actividad_id = data.actividad_id;
         this.lugar_id = data.lugar_id;
@@ -72,10 +73,11 @@ export class Clase {
 
     static async create(data) {
         const sql = `
-            INSERT INTO Clase (horario_id, actividad_id, lugar_id, fecha, hora, hora_fin, estado, motivo_cancelacion, observaciones, usuario_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Clase (tipo, horario_id, actividad_id, lugar_id, fecha, hora, hora_fin, estado, motivo_cancelacion, observaciones, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const values = [
+            data.tipo || 'grupal',
             data.horario_id || null,
             data.actividad_id,
             data.lugar_id,
@@ -95,11 +97,12 @@ export class Clase {
     static async update(id, data) {
         const sql = `
             UPDATE Clase 
-            SET estado = ?, motivo_cancelacion = ?, observaciones = ?, 
+            SET tipo = ?, estado = ?, motivo_cancelacion = ?, observaciones = ?, 
                 fecha = ?, hora = ?, hora_fin = ?
             WHERE id = ? AND deleted_at IS NULL
         `;
         const values = [
+            data.tipo,
             data.estado,
             data.motivo_cancelacion || null,
             data.observaciones || null,
@@ -108,8 +111,9 @@ export class Clase {
             data.hora_fin,
             id
         ];
-        const [result] = await pool.execute(sql, values);
-        return result.affectedRows > 0;
+
+        await pool.execute(sql, values);
+        return await this.findById(id);
     }
 
     static async delete(id) {
@@ -119,21 +123,32 @@ export class Clase {
     }
 
     toJSON() {
+        // Asegurar que la fecha sea una cadena YYYY-MM-DD
+        let fechaFormatted = this.fecha;
+        if (this.fecha instanceof Date) {
+            fechaFormatted = this.fecha.toISOString().split('T')[0];
+        } else if (typeof this.fecha === 'string' && this.fecha.includes('T')) {
+            fechaFormatted = this.fecha.split('T')[0];
+        }
+
         return {
             id: this.id,
+            tipo: this.tipo,
             horario_id: this.horario_id,
             actividad_id: this.actividad_id,
             lugar_id: this.lugar_id,
-            fecha: this.fecha,
+            fecha: fechaFormatted,
             hora: this.hora,
             hora_fin: this.hora_fin,
             estado: this.estado,
             motivo_cancelacion: this.motivo_cancelacion,
             observaciones: this.observaciones,
+            usuario_id: this.usuario_id,
             actividad_nombre: this.actividad_nombre,
             lugar_nombre: this.lugar_nombre,
             asistentes_count: this.asistentes_count,
-            created_at: this.created_at
+            created_at: this.created_at,
+            updated_at: this.updated_at
         };
     }
 }
