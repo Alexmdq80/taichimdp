@@ -10,40 +10,69 @@ export class AsistenciaPage {
     this.currentView = 'list'; // 'list', 'attendance', 'form'
     this.selectedClase = null;
     
-    // Rango por defecto: hoy +/- 7 días
     const today = new Date();
-    const nextWeek = new Date();
-    nextWeek.setDate(today.getDate() + 7);
+    this.selectedMonth = today.getMonth(); // 0-11
+    this.selectedYear = today.getFullYear();
+    this.selectedTipo = ''; // All types by default
     
-    this.filters = {
-      fecha_inicio: today.toISOString().split('T')[0],
-      fecha_fin: nextWeek.toISOString().split('T')[0]
+    this.filters = {};
+    this.updateFiltersFromMonthYear();
+  }
+
+  updateFiltersFromMonthYear() {
+    const firstDay = new Date(this.selectedYear, this.selectedMonth, 1);
+    const lastDay = new Date(this.selectedYear, this.selectedMonth + 1, 0);
+    
+    const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     };
+
+    this.filters.fecha_inicio = formatDate(firstDay);
+    this.filters.fecha_fin = formatDate(lastDay);
+    this.filters.tipo = this.selectedTipo;
   }
 
   async render() {
+    const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+
     this.container.innerHTML = `
       <div class="page-header">
         <h1>Control de Asistencia</h1>
         <div class="actions">
           <button id="new-manual-clase-btn" class="btn btn-primary">Nueva Clase Manual</button>
-          <button id="generate-clases-btn" class="btn btn-secondary">Generar Clases de la Semana</button>
+          <button id="generate-clases-btn" class="btn btn-secondary">Generar Clases del Mes</button>
           <button id="refresh-btn" class="btn btn-outline-primary">Actualizar</button>
         </div>
       </div>
       
       <div class="filters-bar mb-4 p-3 bg-light border rounded">
         <div class="form-row align-items-end">
-          <div class="form-group col-md-4">
-            <label for="fecha_inicio">Desde</label>
-            <input type="date" class="form-control" id="fecha_inicio" value="${this.filters.fecha_inicio}">
+          <div class="form-group col-md-3">
+            <label for="filter-month">Mes</label>
+            <select class="form-control" id="filter-month">
+                ${months.map((m, i) => `<option value="${i}" ${this.selectedMonth === i ? 'selected' : ''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group col-md-2">
+            <label for="filter-year">Año</label>
+            <input type="number" class="form-control" id="filter-year" value="${this.selectedYear}">
           </div>
           <div class="form-group col-md-4">
-            <label for="fecha_fin">Hasta</label>
-            <input type="date" class="form-control" id="fecha_fin" value="${this.filters.fecha_fin}">
+            <label for="filter-tipo">Tipo de Clase</label>
+            <select class="form-control" id="filter-tipo">
+                <option value="" ${this.selectedTipo === '' ? 'selected' : ''}>Todos los tipos</option>
+                <option value="grupal" ${this.selectedTipo === 'grupal' ? 'selected' : ''}>Grupal (Fijo)</option>
+                <option value="flexible" ${this.selectedTipo === 'flexible' ? 'selected' : ''}>Particular/Compartida (Flexible)</option>
+            </select>
           </div>
-          <div class="form-group col-md-4">
-            <button id="filter-btn" class="btn btn-primary btn-block">Filtrar</button>
+          <div class="form-group col-md-3">
+            <button id="filter-btn" class="btn btn-primary btn-block">Aplicar Filtro</button>
           </div>
         </div>
       </div>
@@ -53,7 +82,6 @@ export class AsistenciaPage {
       </div>
     `;
 
-    this.attachEvents();
     await this.renderView();
   }
 
@@ -90,6 +118,15 @@ export class AsistenciaPage {
             } catch (error) {
               displayApiError(error);
             }
+          },
+          onCloseClase: async (id) => {
+            try {
+              await apiClient.put(`/asistencia/clases/${id}`, { estado: 'cerrada' });
+              showSuccess('Clase cerrada correctamente');
+              this.renderView();
+            } catch (error) {
+              displayApiError(error);
+            }
           }
         });
         list.setClases(response.data);
@@ -122,45 +159,61 @@ export class AsistenciaPage {
       });
       await form.render();
     }
+
+    this.attachEvents();
   }
 
   attachEvents() {
-    this.container.querySelector('#new-manual-clase-btn').addEventListener('click', () => {
-      this.selectedClase = null;
-      this.currentView = 'form';
-      this.renderView();
-    });
+    const newBtn = this.container.querySelector('#new-manual-clase-btn');
+    if (newBtn) {
+        newBtn.onclick = () => {
+            this.selectedClase = null;
+            this.currentView = 'form';
+            this.renderView();
+        };
+    }
 
-    this.container.querySelector('#filter-btn').addEventListener('click', () => {
-      this.filters.fecha_inicio = this.container.querySelector('#fecha_inicio').value;
-      this.filters.fecha_fin = this.container.querySelector('#fecha_fin').value;
-      this.renderView();
-    });
+    const filterBtn = this.container.querySelector('#filter-btn');
+    if (filterBtn) {
+        filterBtn.onclick = () => {
+            this.selectedMonth = parseInt(this.container.querySelector('#filter-month').value, 10);
+            this.selectedYear = parseInt(this.container.querySelector('#filter-year').value, 10);
+            this.selectedTipo = this.container.querySelector('#filter-tipo').value;
+            this.updateFiltersFromMonthYear();
+            this.renderView();
+        };
+    }
 
-    this.container.querySelector('#refresh-btn').addEventListener('click', () => {
-      this.renderView();
-    });
+    const refreshBtn = this.container.querySelector('#refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.onclick = () => this.renderView();
+    }
 
-    this.container.querySelector('#generate-clases-btn').addEventListener('click', async () => {
-      if (confirm('Se generarán las sesiones de clase para los próximos 7 días basadas en la configuración de horarios. ¿Desea continuar?')) {
-        try {
-          const today = new Date();
-          const nextWeek = new Date();
-          nextWeek.setDate(today.getDate() + 7);
-          
-          const payload = {
-            startDate: today.toISOString().split('T')[0],
-            endDate: nextWeek.toISOString().split('T')[0]
-          };
-          
-          const response = await apiClient.post('/asistencia/clases/generar', payload);
-          showSuccess(response.message || 'Clases generadas con éxito');
-          this.renderView();
-        } catch (error) {
-          displayApiError(error);
-        }
-      }
-    });
+    const genBtn = this.container.querySelector('#generate-clases-btn');
+    if (genBtn) {
+        genBtn.onclick = async () => {
+            const monthNames = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            const label = `${monthNames[this.selectedMonth]} ${this.selectedYear}`;
+            
+            if (confirm(`Se generarán todas las sesiones de clase para ${label} basadas en la configuración de horarios. ¿Desea continuar?`)) {
+                try {
+                    const payload = {
+                        startDate: this.filters.fecha_inicio,
+                        endDate: this.filters.fecha_fin
+                    };
+                    
+                    const response = await apiClient.post('/asistencia/clases/generar', payload);
+                    showSuccess(response.message || 'Clases generadas con éxito');
+                    this.renderView();
+                } catch (error) {
+                    displayApiError(error);
+                }
+            }
+        };
+    }
   }
 }
 

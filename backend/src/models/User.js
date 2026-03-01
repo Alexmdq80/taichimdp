@@ -44,9 +44,19 @@ export class User {
 
         return newUser;
     }
+/**
+ * Find all users
+ * @returns {Promise<User[]>}
+ */
+static async findAll() {
+    const sql = 'SELECT * FROM User WHERE deleted_at IS NULL ORDER BY email ASC';
+    const [rows] = await pool.execute(sql);
+    return rows.map(row => new User(row));
+}
 
-    /**
-     * Find user by ID (only non-deleted)
+/**
+ * Find user by ID (only non-deleted)
+...
      * @param {number} id - User ID
      * @returns {Promise<User|null>}
      */

@@ -6,6 +6,7 @@ export class Horario {
         this.tipo = data.tipo || 'grupal';
         this.actividad_id = data.actividad_id;
         this.lugar_id = data.lugar_id;
+        this.profesor_id = data.profesor_id || null;
         this.dia_semana = data.dia_semana;
         this.hora_inicio = data.hora_inicio;
         this.hora_fin = data.hora_fin;
@@ -17,14 +18,16 @@ export class Horario {
         // Joined data
         this.actividad_nombre = data.actividad_nombre || null;
         this.lugar_nombre = data.lugar_nombre || null;
+        this.profesor_nombre = data.profesor_nombre || null;
     }
 
     static async findAll(filters = {}) {
         let sql = `
-            SELECT h.*, a.nombre as actividad_nombre, l.nombre as lugar_nombre
+            SELECT h.*, a.nombre as actividad_nombre, l.nombre as lugar_nombre, p.nombre_completo as profesor_nombre
             FROM Horario h
             JOIN Actividad a ON h.actividad_id = a.id
             JOIN Lugar l ON h.lugar_id = l.id
+            LEFT JOIN Practicante p ON h.profesor_id = p.id
             WHERE h.deleted_at IS NULL
         `;
         const params = [];
@@ -59,10 +62,11 @@ export class Horario {
 
     static async findById(id) {
         const sql = `
-            SELECT h.*, a.nombre as actividad_nombre, l.nombre as lugar_nombre
+            SELECT h.*, a.nombre as actividad_nombre, l.nombre as lugar_nombre, p.nombre_completo as profesor_nombre
             FROM Horario h
             JOIN Actividad a ON h.actividad_id = a.id
             JOIN Lugar l ON h.lugar_id = l.id
+            LEFT JOIN Practicante p ON h.profesor_id = p.id
             WHERE h.id = ? AND h.deleted_at IS NULL
         `;
         const [rows] = await pool.execute(sql, [id]);
@@ -71,13 +75,14 @@ export class Horario {
 
     static async create(data, userId = null) {
         const sql = `
-            INSERT INTO Horario (tipo, actividad_id, lugar_id, dia_semana, hora_inicio, hora_fin, activo)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Horario (tipo, actividad_id, lugar_id, profesor_id, dia_semana, hora_inicio, hora_fin, activo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const values = [
             data.tipo || 'grupal',
             data.actividad_id,
             data.lugar_id,
+            data.profesor_id || null,
             data.dia_semana,
             data.hora_inicio,
             data.hora_fin,
@@ -100,13 +105,14 @@ export class Horario {
 
         const sql = `
             UPDATE Horario 
-            SET tipo = ?, actividad_id = ?, lugar_id = ?, dia_semana = ?, hora_inicio = ?, hora_fin = ?, activo = ?
+            SET tipo = ?, actividad_id = ?, lugar_id = ?, profesor_id = ?, dia_semana = ?, hora_inicio = ?, hora_fin = ?, activo = ?
             WHERE id = ? AND deleted_at IS NULL
         `;
         const values = [
             data.tipo || current.tipo,
             data.actividad_id || current.actividad_id,
             data.lugar_id || current.lugar_id,
+            data.profesor_id !== undefined ? data.profesor_id : current.profesor_id,
             data.dia_semana !== undefined ? data.dia_semana : current.dia_semana,
             data.hora_inicio || current.hora_inicio,
             data.hora_fin || current.hora_fin,
@@ -174,12 +180,14 @@ export class Horario {
             tipo: this.tipo,
             actividad_id: this.actividad_id,
             lugar_id: this.lugar_id,
+            profesor_id: this.profesor_id,
             dia_semana: this.dia_semana,
             hora_inicio: this.hora_inicio,
             hora_fin: this.hora_fin,
             activo: this.activo,
             actividad_nombre: this.actividad_nombre,
             lugar_nombre: this.lugar_nombre,
+            profesor_nombre: this.profesor_nombre,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

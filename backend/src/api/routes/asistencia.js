@@ -62,6 +62,11 @@ router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
 
+    // RESTRICTION: Do not allow updates to closed classes
+    if (clase.estado === 'cerrada') {
+        throw new AppError('No se puede modificar la asistencia de una clase cerrada', 400);
+    }
+
     // RESTRICTION: Check state based on class type
     if (clase.tipo === 'grupal') {
         if (clase.estado !== 'realizada') {
@@ -97,19 +102,43 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
 
+    // RESTRICTION: Do not allow updates to closed classes, 
+    // EXCEPT if we are only updating professor payment fields or if values haven't actually changed.
+    if (clase.estado === 'cerrada') {
+        const hasActualChanges = 
+            (data.hasOwnProperty('estado') && data.estado !== clase.estado) ||
+            (data.hasOwnProperty('tipo') && data.tipo !== clase.tipo) ||
+            (data.hasOwnProperty('fecha') && data.fecha !== (clase.fecha instanceof Date ? clase.fecha.toISOString().split('T')[0] : clase.fecha)) ||
+            (data.hasOwnProperty('hora') && data.hora.substring(0, 5) !== clase.hora.substring(0, 5)) ||
+            (data.hasOwnProperty('hora_fin') && data.hora_fin.substring(0, 5) !== clase.hora_fin.substring(0, 5)) ||
+            (data.hasOwnProperty('profesor_id') && data.profesor_id != clase.profesor_id) ||
+            (data.hasOwnProperty('observaciones') && data.observaciones !== clase.observaciones);
+
+        if (hasActualChanges) {
+            throw new AppError('No se pueden modificar los datos principales de una clase que ya está cerrada', 400);
+        }
+    }
+
     // Clean dates/times to avoid ISO strings or invalid MySQL formats
     const cleanFecha = data.fecha ? (typeof data.fecha === 'string' && data.fecha.includes('T') ? data.fecha.split('T')[0] : data.fecha) : clase.fecha;
     const cleanHora = data.hora ? (typeof data.hora === 'string' && data.hora.length > 8 ? data.hora.substring(0, 8) : data.hora) : clase.hora;
     const cleanHoraFin = data.hora_fin ? (typeof data.hora_fin === 'string' && data.hora_fin.length > 8 ? data.hora_fin.substring(0, 8) : data.hora_fin) : clase.hora_fin;
 
-    // RESTRICTION: Only allow marking as "realizada" if class date/time has passed
-    if (data.estado === 'realizada') {
+    // RESTRICTION: Only allow marking as "realizada" or "cerrada" if class date/time has passed
+    if (data.estado === 'realizada' || data.estado === 'cerrada') {
         const classDateTime = new Date(`${cleanFecha}T${cleanHora}`);
         const now = new Date();
         
         if (now < classDateTime) {
-            throw new AppError('No se puede marcar la clase como realizada antes de su fecha y hora de inicio', 400);
+            const label = data.estado === 'realizada' ? 'realizada' : 'cerrada';
+            throw new AppError(`No se puede marcar la clase como ${label} antes de su fecha y hora de inicio`, 400);
         }
+    }
+
+    // RESTRICTION: Only allow closing if it was previously 'realizada' 
+    // Actually, the user says "una vez que la clase se marca como 'realizada', se habilite la posibilidad de cerrarla".
+    if (data.estado === 'cerrada' && clase.estado !== 'realizada' && clase.estado !== 'cerrada') {
+        throw new AppError('Solo se puede cerrar una clase que ya ha sido marcada como "Realizada"', 400);
     }
 
     const updatedClase = await Clase.update(id, {
@@ -119,7 +148,10 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
         observaciones: data.observaciones !== undefined ? data.observaciones : clase.observaciones,
         fecha: cleanFecha,
         hora: cleanHora,
-        hora_fin: cleanHoraFin
+        hora_fin: cleanHoraFin,
+        profesor_id: data.profesor_id !== undefined ? data.profesor_id : clase.profesor_id,
+        pago_profesor_realizado: data.pago_profesor_realizado !== undefined ? data.pago_profesor_realizado : clase.pago_profesor_realizado,
+        fecha_pago_profesor: data.fecha_pago_profesor !== undefined ? data.fecha_pago_profesor : clase.fecha_pago_profesor
     });
 
     res.json({ data: updatedClase.toJSON() });
@@ -191,7 +223,7 @@ router.post('/clases/:id/registrar', asyncHandler(async (req, res) => {
  */
 router.post('/clases/generar', asyncHandler(async (req, res) => {
     const { startDate, endDate } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     if (!startDate || !endDate) {
         throw new AppError('Se requieren las fechas de inicio y fin para generar las clases', 400);
@@ -213,7 +245,8 @@ router.get('/clases', asyncHandler(async (req, res) => {
         fecha_inicio: req.query.fecha_inicio,
         fecha_fin: req.query.fecha_fin,
         actividad_id: req.query.actividad_id,
-        lugar_id: req.query.lugar_id
+        lugar_id: req.query.lugar_id,
+        tipo: req.query.tipo
     };
     const clases = await Clase.findAll(filters);
     res.json({ data: clases.map(c => c.toJSON()) });
@@ -236,7 +269,7 @@ router.get('/clases/:id', asyncHandler(async (req, res) => {
  */
 router.post('/clases', asyncHandler(async (req, res) => {
     const data = req.body;
-    data.usuario_id = req.user.id;
+    data.usuario_id = req.user.userId;
 
     if (!data.actividad_id || !data.lugar_id || !data.fecha || !data.hora || !data.hora_fin) {
         throw new AppError('Todos los campos son obligatorios (actividad, lugar, fecha, hora inicio, hora fin)', 400);

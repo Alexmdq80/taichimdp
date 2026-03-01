@@ -11,16 +11,19 @@ export class HorarioForm {
     };
     this.actividades = [];
     this.lugares = [];
+    this.profesores = [];
   }
 
   async loadInitialData() {
     try {
-      const [actividadesRes, lugaresRes] = await Promise.all([
+      const [actividadesRes, lugaresRes, profesoresRes] = await Promise.all([
         apiClient.get('/actividades'),
-        apiClient.get('/lugares')
+        apiClient.get('/lugares'),
+        apiClient.get('/practicantes', { es_profesor: true, limit: 100 })
       ]);
       this.actividades = actividadesRes.data;
       this.lugares = lugaresRes.data;
+      this.profesores = profesoresRes.data;
     } catch (error) {
       displayApiError(error);
     }
@@ -33,6 +36,7 @@ export class HorarioForm {
       tipo: 'grupal',
       actividad_id: '',
       lugar_id: '',
+      profesor_id: '',
       dia_semana: 1, // Lunes por defecto
       hora_inicio: '18:00',
       hora_fin: '19:00',
@@ -56,11 +60,18 @@ export class HorarioForm {
         <div class="card-body">
           <form id="horario-form">
             <div class="form-row">
-              <div class="form-group col-md-12">
+              <div class="form-group col-md-6">
                 <label for="tipo">Tipo de Clase para este Horario</label>
                 <select class="form-control" id="tipo" required>
                   <option value="grupal" ${h.tipo === 'grupal' ? 'selected' : ''}>Grupal (Horario fijo)</option>
                   <option value="flexible" ${h.tipo === 'flexible' ? 'selected' : ''}>Particular/Compartida (Horario pautado)</option>
+                </select>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="profesor_id">Profesor Responsable</label>
+                <select class="form-control" id="profesor_id">
+                  <option value="">Seleccione un profesor</option>
+                  ${this.profesores.map(p => `<option value="${p.id}" ${h.profesor_id == p.id ? 'selected' : ''}>${p.nombre_completo}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -133,6 +144,7 @@ export class HorarioForm {
         tipo: this.container.querySelector('#tipo').value,
         actividad_id: parseInt(this.container.querySelector('#actividad_id').value, 10),
         lugar_id: parseInt(this.container.querySelector('#lugar_id').value, 10),
+        profesor_id: this.container.querySelector('#profesor_id').value ? parseInt(this.container.querySelector('#profesor_id').value, 10) : null,
         dia_semana: parseInt(this.container.querySelector('#dia_semana').value, 10),
         hora_inicio: this.container.querySelector('#hora_inicio').value,
         hora_fin: this.container.querySelector('#hora_fin').value,

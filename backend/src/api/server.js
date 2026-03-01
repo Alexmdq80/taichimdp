@@ -38,6 +38,9 @@ import lugaresRoutes from './routes/lugares.js'; // Import lugares routes
 import actividadesRoutes from './routes/actividades.js'; // Import actividades routes
 import horariosRoutes from './routes/horarios.js'; // Import horarios routes
 import asistenciaRoutes from './routes/asistencia.js'; // Import asistencia routes
+import sociosRoutes from './routes/socios.js'; // Import socios routes
+import pagosSociosRoutes from './routes/pagosSocios.js'; // Import pagosSocios routes
+import usersRoutes from './routes/users.js'; // Import users routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
@@ -48,6 +51,9 @@ app.use('/api/lugares', lugaresRoutes); // Mount lugares routes
 app.use('/api/actividades', actividadesRoutes); // Mount actividades routes
 app.use('/api/horarios', horariosRoutes); // Mount horarios routes
 app.use('/api/asistencia', asistenciaRoutes); // Mount asistencia routes (includes /api/asistencia/clases)
+app.use('/api/socios', sociosRoutes); // Mount socios routes
+app.use('/api/pagos-socios', pagosSociosRoutes); // Mount pagosSocios routes
+app.use('/api/users', usersRoutes); // Mount users routes
 
 // 404 handler
 app.use((req, res) => {

@@ -4,6 +4,8 @@
 
 import { initRouter, route, navigate } from './router.js';
 import PracticantesPage from './pages/practicantes.js';
+import SociosPage from './pages/socios.js';
+import ProfesoresPage from './pages/profesores.js';
 import LoginPage from './pages/login.js';
 import RegisterPage from './pages/register.js';
 import TiposAbonoPage from './pages/tiposAbono.js'; // Import the new page component
@@ -12,6 +14,8 @@ import LugaresPage from './pages/lugares.js'; // Import LugaresPage
 import ActividadesPage from './pages/actividades.js'; // Import ActividadesPage
 import HorariosPage from './pages/horarios.js'; // Import HorariosPage
 import AsistenciaPage from './pages/asistencia.js'; // Import AsistenciaPage
+import CostosPage from './pages/costos.js'; // Import CostosPage
+import { apiClient } from './api/client.js';
 
 // Function to check if user is authenticated
 function isAuthenticated() {
@@ -36,6 +40,19 @@ function updateNavigation() {
       practicantesLink.href = '/practicantes';
       practicantesLink.textContent = 'Practicantes';
       navLinksDiv.appendChild(practicantesLink);
+
+      const sociosLink = document.createElement('a');
+      sociosLink.href = '/socios';
+      sociosLink.textContent = 'Socios';
+      navLinksDiv.appendChild(sociosLink);
+
+      // Check for teacher alerts asynchronously
+      checkTeacherAlerts(sociosLink);
+
+      const profesoresLink = document.createElement('a');
+      profesoresLink.href = '/profesores';
+      profesoresLink.textContent = 'Profesores';
+      navLinksDiv.appendChild(profesoresLink);
 
       const tiposAbonoLink = document.createElement('a'); // New link for tipos de abono
       tiposAbonoLink.href = '/tipos-abono';
@@ -67,6 +84,11 @@ function updateNavigation() {
       asistenciaLink.textContent = 'Asistencia';
       navLinksDiv.appendChild(asistenciaLink);
 
+      const costosLink = document.createElement('a');
+      costosLink.href = '/costos';
+      costosLink.textContent = 'Costos';
+      navLinksDiv.appendChild(costosLink);
+
       const logoutLink = document.createElement('a');
       logoutLink.href = '#'; // Prevent default navigation
       logoutLink.textContent = 'Cerrar Sesión';
@@ -88,6 +110,39 @@ function updateNavigation() {
       navLinksDiv.appendChild(registerLink);
     }
   }
+}
+
+async function checkTeacherAlerts(sociosLink) {
+    if (!isAuthenticated()) return;
+    try {
+        const response = await apiClient.get('/socios/teacher-alerts');
+        const alerts = response.data;
+        const totalAlerts = alerts.missingRegistration.length + alerts.expiredPayments.length;
+        
+        if (totalAlerts > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-danger ml-1';
+            badge.style.borderRadius = '10px';
+            badge.style.padding = '2px 8px';
+            badge.style.fontSize = '0.75rem';
+            badge.style.fontWeight = 'bold';
+            badge.textContent = totalAlerts;
+            badge.title = 'Tiene cuotas sociales de profesor pendientes o por vencer';
+            sociosLink.appendChild(badge);
+        } else if (alerts.soonToExpire.length > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-warning ml-1';
+            badge.style.borderRadius = '10px';
+            badge.style.padding = '2px 8px';
+            badge.style.fontSize = '0.75rem';
+            badge.style.fontWeight = 'bold';
+            badge.textContent = alerts.soonToExpire.length;
+            badge.title = 'Tiene cuotas sociales de profesor próximas a vencer';
+            sociosLink.appendChild(badge);
+        }
+    } catch (error) {
+        console.error('Error checking teacher alerts:', error);
+    }
 }
 
 // Register routes
@@ -127,6 +182,32 @@ route('/practicantes', () => {
   const mainContent = document.querySelector('#main-content');
   if (mainContent) {
     const page = new PracticantesPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/socios', () => {
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new SociosPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/profesores', () => {
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new ProfesoresPage(mainContent);
     page.render();
   }
   updateNavigation(); // Update navigation after routing
@@ -230,6 +311,19 @@ route('/asistencia', () => { // New route for Asistencia
   const mainContent = document.querySelector('#main-content');
   if (mainContent) {
     const page = new AsistenciaPage(mainContent);
+    page.render();
+  }
+  updateNavigation(); // Update navigation after routing
+});
+
+route('/costos', () => {
+  if (!isAuthenticated()) {
+    navigate('/login');
+    return;
+  }
+  const mainContent = document.querySelector('#main-content');
+  if (mainContent) {
+    const page = new CostosPage(mainContent);
     page.render();
   }
   updateNavigation(); // Update navigation after routing

@@ -12,18 +12,21 @@ export class ClaseForm {
     this.actividades = [];
     this.lugares = [];
     this.practicantes = [];
+    this.profesores = [];
   }
 
   async loadInitialData() {
     try {
-      const [actividadesRes, lugaresRes, practicantesRes] = await Promise.all([
+      const [actividadesRes, lugaresRes, practicantesRes, profesoresRes] = await Promise.all([
         apiClient.get('/actividades'),
         apiClient.get('/lugares'),
-        apiClient.get('/practicantes?limit=1000') // Load all for reservation
+        apiClient.get('/practicantes?limit=1000&es_profesor=false'), // Only actual students for reservation
+        apiClient.get('/practicantes', { es_profesor: true, limit: 100 })
       ]);
       this.actividades = actividadesRes.data;
       this.lugares = lugaresRes.data;
       this.practicantes = practicantesRes.data || [];
+      this.profesores = profesoresRes.data || [];
 
       // If editing, load current attendees to pre-check them
       this.currentAttendees = [];
@@ -50,6 +53,7 @@ export class ClaseForm {
       tipo: 'grupal',
       actividad_id: '',
       lugar_id: '',
+      profesor_id: '',
       fecha: today,
       hora: '18:00',
       hora_fin: '19:00',
@@ -73,11 +77,18 @@ export class ClaseForm {
         <div class="card-body">
           <form id="clase-form">
             <div class="form-row">
-              <div class="form-group col-md-12">
+              <div class="form-group col-md-6">
                 <label for="tipo">Tipo de Clase</label>
                 <select class="form-control" id="tipo" required>
                   <option value="grupal" ${c.tipo === 'grupal' ? 'selected' : ''}>Grupal (Horario fijo)</option>
                   <option value="flexible" ${c.tipo === 'flexible' ? 'selected' : ''}>Particular / Compartida (Horario pautado)</option>
+                </select>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="profesor_id">Profesor Responsable</label>
+                <select class="form-control" id="profesor_id">
+                  <option value="">Seleccione un profesor</option>
+                  ${this.profesores.map(p => `<option value="${p.id}" ${c.profesor_id == p.id ? 'selected' : ''}>${p.nombre_completo}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -175,6 +186,7 @@ export class ClaseForm {
         tipo: tipoSelect.value,
         actividad_id: parseInt(this.container.querySelector('#actividad_id').value, 10),
         lugar_id: parseInt(this.container.querySelector('#lugar_id').value, 10),
+        profesor_id: this.container.querySelector('#profesor_id').value ? parseInt(this.container.querySelector('#profesor_id').value, 10) : null,
         fecha: this.container.querySelector('#fecha').value,
         hora: this.container.querySelector('#hora').value,
         hora_fin: this.container.querySelector('#hora_fin').value,

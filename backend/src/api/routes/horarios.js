@@ -38,7 +38,7 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
  */
 router.post('/', asyncHandler(async (req, res) => {
     const data = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     if (!data.actividad_id || !data.lugar_id || data.dia_semana === undefined || !data.hora_inicio || !data.hora_fin) {
         throw new AppError('Todos los campos son obligatorios (actividad, lugar, día, hora inicio, hora fin)', 400);
@@ -55,7 +55,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const data = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const updated = await Horario.update(id, data, userId);
     if (!updated) throw new AppError('Horario no encontrado', 404);
@@ -69,7 +69,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const deleted = await Horario.delete(id, userId);
     if (!deleted) throw new AppError('Horario no encontrado', 404);

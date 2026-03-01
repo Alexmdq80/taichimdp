@@ -6,6 +6,8 @@ import pool from '../config/database.js';
 export class Practicante {
     constructor(data) {
         this.id = data.id || null;
+        this.user_id = data.user_id || null;
+        this.es_profesor = data.es_profesor !== undefined ? !!data.es_profesor : false;
         this.nombre_completo = data.nombre_completo;
         this.fecha_nacimiento = data.fecha_nacimiento || null;
         this.genero = data.genero || null;
@@ -30,12 +32,14 @@ export class Practicante {
     static async create(data, userId = null) {
         const sql = `
       INSERT INTO Practicante (
-        nombre_completo, fecha_nacimiento, genero, telefono, email,
+        user_id, es_profesor, nombre_completo, fecha_nacimiento, genero, telefono, email,
         direccion, condiciones_medicas, medicamentos, limitaciones_fisicas, alergias
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
         const values = [
+            data.user_id || null,
+            data.es_profesor !== undefined ? data.es_profesor : false,
             data.nombre_completo,
             data.fecha_nacimiento || null,
             data.genero || null,
@@ -82,10 +86,11 @@ export class Practicante {
      * @param {string} options.search - Search term (nombre, telefono, email)
      * @param {number} options.page - Page number
      * @param {number} options.limit - Results per page
+     * @param {boolean} options.es_profesor - Filter by teacher status
      * @returns {Promise<Object>} - { data: Practicante[], pagination: {...} }
      */
     static async findAll(options = {}) {
-        const { search = '', page = 1, limit = 50 } = options;
+        const { search = '', page = 1, limit = 50, es_profesor } = options;
 
         // Validate and convert to integers
         const pageNum = parseInt(page, 10) || 1;
@@ -102,13 +107,17 @@ export class Practicante {
             searchParams.push(searchTerm, searchTerm, searchTerm);
         }
 
+        if (es_profesor !== undefined) {
+            whereClause += ' AND es_profesor = ?';
+            searchParams.push(es_profesor ? 1 : 0);
+        }
+
         // Get total count
         const countSql = `SELECT COUNT(*) as total FROM Practicante${whereClause}`;
         const [countRows] = await pool.execute(countSql, searchParams);
         const total = countRows[0]?.total || 0;
 
         // Get paginated results
-        // Note: LIMIT and OFFSET must be numbers, not placeholders in MySQL2
         const sql = `SELECT * FROM Practicante${whereClause} ORDER BY nombre_completo ASC LIMIT ${limitNum} OFFSET ${offset}`;
 
         const [rows] = await pool.execute(sql, searchParams);
@@ -125,6 +134,12 @@ export class Practicante {
         };
     }
 
+    static async findByUserId(userId) {
+        const sql = 'SELECT * FROM Practicante WHERE user_id = ? AND deleted_at IS NULL';
+        const [rows] = await pool.execute(sql, [userId]);
+        return rows.length ? new Practicante(rows[0]) : null;
+    }
+
     /**
      * Update practicante and record history
      * @param {number} id - Practicante ID
@@ -138,7 +153,8 @@ export class Practicante {
 
         const allowedFields = [
             'nombre_completo', 'fecha_nacimiento', 'genero', 'telefono', 'email',
-            'direccion', 'condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias'
+            'direccion', 'condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias',
+            'user_id', 'es_profesor'
         ];
 
         const updates = [];
@@ -147,7 +163,7 @@ export class Practicante {
         for (const field of allowedFields) {
             if (data.hasOwnProperty(field)) {
                 updates.push(`${field} = ?`);
-                values.push(data[field] || null);
+                values.push(data[field] === undefined ? null : data[field]);
             }
         }
 
@@ -250,8 +266,6 @@ export class Practicante {
      * @returns {Promise<boolean>}
      */
     static async hasRelatedRecords(id) {
-        // We only check for active related records, or maybe we don't care since we soft delete?
-        // Let's keep checking for now but consider deleted_at
         const sql = `
       SELECT 
         (SELECT COUNT(*) FROM Abono WHERE practicante_id = ? AND deleted_at IS NULL) as abonos,
@@ -270,6 +284,8 @@ export class Practicante {
     toJSON() {
         return {
             id: this.id,
+            user_id: this.user_id,
+            es_profesor: this.es_profesor,
             nombre_completo: this.nombre_completo,
             fecha_nacimiento: this.fecha_nacimiento,
             genero: this.genero,

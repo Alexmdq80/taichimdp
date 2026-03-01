@@ -25,7 +25,10 @@ export class AsistenciaService {
         const clasesExistentes = await Clase.findAll({ fecha_inicio: startDate, fecha_fin: endDate });
         console.log(`Found ${clasesExistentes.length} existing classes in range`);
         
-        const existenteMap = new Set(clasesExistentes.map(c => {
+        const existenteMap = new Set();
+        const slotOcupadoMap = new Set();
+
+        clasesExistentes.forEach(c => {
             // Asegurar que la fecha sea string YYYY-MM-DD
             let f = c.fecha;
             if (f instanceof Date) {
@@ -36,8 +39,17 @@ export class AsistenciaService {
             } else if (typeof f === 'string') {
                 f = f.split('T')[0];
             }
-            return `${c.horario_id}_${f}`;
-        }));
+
+            // 1. Mapa por ID de horario (para clases automáticas)
+            if (c.horario_id) {
+                existenteMap.add(`${c.horario_id}_${f}`);
+            }
+
+            // 2. Mapa por slot físico (para evitar duplicados con clases manuales)
+            // Usamos: fecha_lugar_actividad_hora (primeros 5 caracteres de la hora HH:MM)
+            const horaHHMM = c.hora.substring(0, 5);
+            slotOcupadoMap.add(`${f}_${c.lugar_id}_${c.actividad_id}_${horaHHMM}`);
+        });
 
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const diaSemana = d.getDay(); // 0-6 (Dom-Sab)
@@ -51,21 +63,31 @@ export class AsistenciaService {
             const horariosDelDia = horarios.filter(h => h.dia_semana === diaSemana);
 
             for (const h of horariosDelDia) {
-                const key = `${h.id}_${fechaStr}`;
-                if (!existenteMap.has(key)) {
+                const scheduleKey = `${h.id}_${fechaStr}`;
+                const horaHHMM = h.hora_inicio.substring(0, 5);
+                const slotKey = `${fechaStr}_${h.lugar_id}_${h.actividad_id}_${horaHHMM}`;
+
+                if (!existenteMap.has(scheduleKey) && !slotOcupadoMap.has(slotKey)) {
                     console.log(`Creating class for schedule ${h.id} on ${fechaStr}`);
                     const nuevaClase = await Clase.create({
                         horario_id: h.id,
                         tipo: h.tipo,
                         actividad_id: h.actividad_id,
                         lugar_id: h.lugar_id,
+                        profesor_id: h.profesor_id,
                         fecha: fechaStr,
                         hora: h.hora_inicio,
                         hora_fin: h.hora_fin,
                         usuario_id: userId,
-                        descripcion: `Generada automáticamente desde horario semanal`
+                        observaciones: `Generada automáticamente desde horario semanal`
                     });
                     clasesGeneradas.push(nuevaClase);
+                    
+                    // Marcar como ocupado para evitar duplicados en el mismo loop si hubiera horarios solapados
+                    existenteMap.add(scheduleKey);
+                    slotOcupadoMap.add(slotKey);
+                } else {
+                    console.log(`Skipping duplicate class for schedule ${h.id} or slot ${slotKey}`);
                 }
             }
         }

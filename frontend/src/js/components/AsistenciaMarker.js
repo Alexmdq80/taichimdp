@@ -10,13 +10,18 @@ export class AsistenciaMarker {
             onClose: options.onClose || (() => {})
         };
         this.practicantes = [];
+        this.profesores = [];
     }
 
-    async loadPracticantes(estadoOverride = null) {
+    async loadData(estadoOverride = null) {
         try {
             const url = `/asistencia/clases/${this.options.clase.id}/practicantes${estadoOverride ? `?estado=${estadoOverride}` : ''}`;
-            const response = await apiClient.get(url);
-            this.practicantes = response.data;
+            const [practRes, profRes] = await Promise.all([
+                apiClient.get(url),
+                apiClient.get('/practicantes', { es_profesor: true, limit: 100 })
+            ]);
+            this.practicantes = practRes.data;
+            this.profesores = profRes.data;
         } catch (error) {
             displayApiError(error);
         }
@@ -28,7 +33,7 @@ export class AsistenciaMarker {
     }
 
     async render() {
-        await this.loadPracticantes();
+        await this.loadData();
         const c = this.options.clase;
 
         // Validaciones de tiempo y estado
@@ -50,7 +55,7 @@ export class AsistenciaMarker {
                                 <i class="fas ${c.tipo === 'flexible' ? 'fa-calendar-check' : 'fa-users'}"></i> 
                                 ${this.formatTipo(c.tipo)}
                             </span>
-                            <span class="badge ${c.estado === 'programada' ? 'badge-success' : 'badge-secondary'}" style="font-size: 0.9rem; padding: 0.4rem 0.8rem; margin-left: 0.5rem;">
+                            <span class="badge ${c.estado === 'programada' ? 'badge-success' : (c.estado === 'cerrada' ? 'badge-dark' : 'badge-secondary')}" style="font-size: 0.9rem; padding: 0.4rem 0.8rem; margin-left: 0.5rem;">
                                 Estado: ${c.estado.charAt(0).toUpperCase() + c.estado.slice(1)}
                             </span>
                         </div>
@@ -58,12 +63,14 @@ export class AsistenciaMarker {
                     <button id="close-attendance-btn" class="btn btn-secondary">Volver al Listado</button>
                 </div>
                 <div class="card-body">
-                    <div id="attendance-alert" class="alert alert-warning mb-4" style="display: ${canModifyAttendanceInitial ? 'none' : 'block'};">
+                    <div id="attendance-alert" class="alert alert-warning mb-4" style="display: ${canModifyAttendanceInitial && c.estado !== 'cerrada' ? 'none' : 'block'};">
                         <i class="fas fa-exclamation-triangle"></i> 
                         <strong>Atención:</strong> 
-                        ${c.tipo === 'grupal' 
-                            ? 'La asistencia de clases grupales solo se puede marcar cuando la clase está en estado <strong>"Realizada"</strong>.' 
-                            : 'La asistencia de clases particulares se puede marcar en estado <strong>"Programada"</strong> o <strong>"Realizada"</strong>.'}
+                        ${c.estado === 'cerrada' 
+                            ? 'Esta clase está <strong>cerrada</strong>. No se permiten modificaciones en la asistencia ni en los detalles.' 
+                            : (c.tipo === 'grupal' 
+                                ? 'La asistencia de clases grupales solo se puede marcar cuando la clase está en estado <strong>"Realizada"</strong>.' 
+                                : 'La asistencia de clases particulares se puede marcar en estado <strong>"Programada"</strong> o <strong>"Realizada"</strong>.')}
                     </div>
                     
                     <div class="grid grid-2 gap-4">
@@ -76,24 +83,34 @@ export class AsistenciaMarker {
                                 <p><strong>Horario:</strong> ${formatTime(c.hora)} - ${formatTime(c.hora_fin)}</p>
                                 
                                 <div class="form-group mt-3">
+                                    <label for="clase-profesor"><strong>Profesor Responsable:</strong></label>
+                                    <select class="form-control d-inline-block w-auto ml-2" id="clase-profesor" ${c.estado === 'cerrada' ? 'disabled' : ''}>
+                                        <option value="">Seleccione un profesor</option>
+                                        ${this.profesores.map(p => `<option value="${p.id}" ${c.profesor_id == p.id ? 'selected' : ''}>${p.nombre_completo}</option>`).join('')}
+                                    </select>
+                                </div>
+
+                                <div class="form-group mt-3">
                                     <label for="clase-estado"><strong>Estado de la Clase:</strong></label>
-                                    <select class="form-control d-inline-block w-auto ml-2" id="clase-estado">
+                                    <select class="form-control d-inline-block w-auto ml-2" id="clase-estado" ${c.estado === 'cerrada' ? 'disabled' : ''}>
                                         <option value="programada" ${c.estado === 'programada' ? 'selected' : ''}>Programada</option>
                                         <option value="realizada" ${c.estado === 'realizada' ? 'selected' : ''} ${!isTimePassed ? 'disabled' : ''}>Realizada</option>
+                                        <option value="cerrada" ${c.estado === 'cerrada' ? 'selected' : ''} disabled>Cerrada</option>
                                         <option value="cancelada" ${c.estado === 'cancelada' ? 'selected' : ''}>Cancelada</option>
                                         <option value="suspendida" ${c.estado === 'suspendida' ? 'selected' : ''}>Suspendida</option>
                                     </select>
                                     ${!isTimePassed ? '<br><small class="text-muted">La opción "Realizada" se habilitará cuando pase la fecha/hora de la clase.</small>' : ''}
+                                    ${c.estado === 'cerrada' ? '<br><small class="text-muted">No se puede cambiar el estado de una clase cerrada.</small>' : ''}
                                 </div>
 
                                 <div id="motivo-cancelacion-group" class="form-group" style="display: ${c.estado === 'cancelada' || c.estado === 'suspendida' ? 'block' : 'none'};">
                                     <label for="motivo-cancelacion"><strong>Motivo:</strong></label>
-                                    <input type="text" id="motivo-cancelacion" class="form-control" value="${c.motivo_cancelacion || ''}" placeholder="Especifique el motivo">
+                                    <input type="text" id="motivo-cancelacion" class="form-control" value="${c.motivo_cancelacion || ''}" placeholder="Especifique el motivo" ${c.estado === 'cerrada' ? 'disabled' : ''}>
                                 </div>
 
                                 <div class="form-group">
                                     <label for="clase-observaciones"><strong>Observaciones:</strong></label>
-                                    <textarea id="clase-observaciones" class="form-control" rows="2">${c.observaciones || ''}</textarea>
+                                    <textarea id="clase-observaciones" class="form-control" rows="2" ${c.estado === 'cerrada' ? 'disabled' : ''}>${c.observaciones || ''}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -109,40 +126,13 @@ export class AsistenciaMarker {
                                             <th>Abono / Cuota</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        ${this.practicantes.map(p => {
-                                            const limitReached = p.asistencias_esta_semana >= p.clases_por_semana;
-                                            const warningClass = limitReached && !p.asistio ? 'table-warning' : '';
-                                            return `
-                                            <tr class="${warningClass}">
-                                                <td>
-                                                    <div class="flex items-center justify-center" style="display: flex; align-items: center; justify-content: center; height: 100%;">
-                                                        <input type="checkbox" class="attendance-checkbox" 
-                                                            data-id="${p.id}" 
-                                                            data-limit-reached="${limitReached}"
-                                                            data-nombre="${p.nombre_completo}"
-                                                            ${p.asistio ? 'checked' : ''} 
-                                                            ${!canModifyAttendanceInitial ? 'disabled' : ''}
-                                                            style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <strong>${p.nombre_completo}</strong>
-                                                    ${limitReached && !p.asistio ? `<br><small class="text-danger"><i class="fas fa-exclamation-triangle"></i> Límite semanal alcanzado (${p.asistencias_esta_semana}/${p.clases_por_semana})</small>` : ''}
-                                                </td>
-                                                <td>
-                                                    <small class="text-muted">${p.abono_nombre}</small><br>
-                                                    <small class="${limitReached ? 'text-danger font-weight-bold' : 'text-success'}">
-                                                        Semanales: ${p.asistencias_esta_semana} / ${p.clases_por_semana}
-                                                    </small>
-                                                </td>
-                                            </tr>
-                                        `;}).join('')}
+                                    <tbody id="attendance-table-body">
+                                        ${this.renderPracticantesRows(canModifyAttendanceInitial, c.estado === 'cerrada')}
                                     </tbody>
                                 </table>
                             </div>
                             <div class="mt-3 text-right">
-                                <button id="save-attendance-btn" class="btn btn-primary btn-lg">Guardar Cambios</button>
+                                <button id="save-attendance-btn" class="btn btn-primary btn-lg" ${c.estado === 'cerrada' ? 'disabled' : ''}>Guardar Cambios</button>
                             </div>
                         </div>
                     </div>
@@ -153,16 +143,10 @@ export class AsistenciaMarker {
         this.attachEvents();
     }
 
-    renderTableBody() {
-        const tableBody = this.container.querySelector('tbody');
-        const currentEstado = this.container.querySelector('#clase-estado').value;
-        const c = this.options.clase;
-        const canModify = c.tipo === 'grupal' 
-            ? (currentEstado === 'realizada') 
-            : (currentEstado === 'programada' || currentEstado === 'realizada');
-
-        tableBody.innerHTML = this.practicantes.map(p => {
-            const limitReached = p.asistencias_esta_semana >= p.clases_por_semana;
+    renderPracticantesRows(canModify, isClosed) {
+        return this.practicantes.map(p => {
+            const isGroupOrShared = p.categoria === 'grupal' || p.categoria === 'compartida';
+            const limitReached = isGroupOrShared && p.asistencias_esta_semana >= p.clases_por_semana;
             const warningClass = limitReached && !p.asistio ? 'table-warning' : '';
             return `
             <tr class="${warningClass}">
@@ -173,7 +157,7 @@ export class AsistenciaMarker {
                             data-limit-reached="${limitReached}"
                             data-nombre="${p.nombre_completo}"
                             ${p.asistio ? 'checked' : ''} 
-                            ${!canModify ? 'disabled' : ''}
+                            ${!canModify || isClosed ? 'disabled' : ''}
                             style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
                     </div>
                 </td>
@@ -184,18 +168,14 @@ export class AsistenciaMarker {
                 <td>
                     <small class="text-muted">${p.abono_nombre}</small><br>
                     <small class="${limitReached ? 'text-danger font-weight-bold' : 'text-success'}">
-                        Semanales: ${p.asistencias_esta_semana} / ${p.clases_por_semana}
+                        ${(p.categoria === 'particular' || p.categoria === 'compartida') 
+                            ? `Disponibles: ${Math.max(0, p.cantidad_total - p.consumed_count)}`
+                            : `Semanales: ${p.asistencias_esta_semana} / ${p.clases_por_semana}`
+                        }
                     </small>
                 </td>
             </tr>
         `;}).join('');
-
-        this.attachCheckboxEvents();
-        
-        const alertBox = this.container.querySelector('#attendance-alert');
-        if (alertBox) {
-            alertBox.style.display = canModify ? 'none' : 'block';
-        }
     }
 
     attachCheckboxEvents() {
@@ -230,12 +210,14 @@ export class AsistenciaMarker {
             
             // Si es grupal y cambia a realizada, recargar lista para mostrar a todos
             if (c.tipo === 'grupal' && currentEstado === 'realizada') {
-                const tableBody = this.container.querySelector('tbody');
+                const tableBody = this.container.querySelector('#attendance-table-body');
                 tableBody.innerHTML = '<tr><td colspan="3" class="text-center">Actualizando lista de alumnos...</td></tr>';
                 
-                await this.loadPracticantes('realizada');
-                this.renderTableBody();
-                return; // renderTableBody ya maneja el resto de la lógica visual
+                await this.loadData('realizada');
+                tableBody.innerHTML = this.renderPracticantesRows(true, false);
+                this.attachCheckboxEvents();
+                alertBox.style.display = 'none';
+                return;
             }
 
             // Toggle motivo group
@@ -267,13 +249,15 @@ export class AsistenciaMarker {
             });
 
             const estado = estadoSelect.value;
+            const profesor_id = this.container.querySelector('#clase-profesor').value;
             const observaciones = this.container.querySelector('#clase-observaciones').value;
             const motivo_cancelacion = this.container.querySelector('#motivo-cancelacion') ? this.container.querySelector('#motivo-cancelacion').value : '';
 
             try {
-                // 1. Save class data (Always allowed)
+                // 1. Save class data
                 await apiClient.put(`/asistencia/clases/${this.options.clase.id}`, {
                     estado,
+                    profesor_id: profesor_id ? parseInt(profesor_id, 10) : null,
                     observaciones,
                     motivo_cancelacion,
                     tipo: this.options.clase.tipo,
@@ -282,8 +266,8 @@ export class AsistenciaMarker {
                     hora_fin: this.options.clase.hora_fin
                 });
 
-                // 2. Save attendance only if allowed by business rules
-                const canModify = c.tipo === 'grupal' ? (estado === 'realizada') : (estado === 'programada');
+                // 2. Save attendance
+                const canModify = c.tipo === 'grupal' ? (estado === 'realizada') : (estado === 'programada' || estado === 'realizada');
                 if (canModify && updates.length > 0) {
                     await apiClient.post(`/asistencia/clases/${this.options.clase.id}/practicantes`, { updates });
                 }

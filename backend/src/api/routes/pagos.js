@@ -24,7 +24,7 @@ router.get('/', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const userId = req.user.id;
+    const userId = req.user.userId;
     if (isNaN(id)) {
         throw new AppError('Invalid ID: ID must be a valid integer', 400);
     }

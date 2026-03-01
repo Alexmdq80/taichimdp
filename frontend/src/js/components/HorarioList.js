@@ -32,6 +32,7 @@ export class HorarioList {
             <tr>
               <th>Día</th>
               <th>Horario</th>
+              <th>Profesor</th>
               <th>Tipo</th>
               <th>Actividad</th>
               <th>Lugar</th>
@@ -40,11 +41,12 @@ export class HorarioList {
             </tr>
           </thead>
           <tbody>
-            ${this.horarios.length === 0 ? '<tr><td colspan="7" class="text-center">No hay horarios configurados</td></tr>' : ''}
+            ${this.horarios.length === 0 ? '<tr><td colspan="8" class="text-center">No hay horarios configurados</td></tr>' : ''}
             ${this.horarios.map(h => `
               <tr class="${!h.activo ? 'text-muted' : ''}">
                 <td><strong>${this.diasSemana[h.dia_semana]}</strong></td>
                 <td>${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)}</td>
+                <td><small>${h.profesor_nombre || '<span class="text-muted">Sin asignar</span>'}</small></td>
                 <td>
                     <span class="badge ${h.tipo === 'grupal' ? 'badge-primary' : 'badge-info'}">
                         ${this.formatTipo(h.tipo)}

@@ -43,7 +43,7 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
  */
 router.post('/', asyncHandler(async (req, res) => {
   const data = req.body;
-  const userId = req.user.id;
+  const userId = req.user.userId;
   if (!data.nombre) throw new AppError('Nombre is required', 400);
   const lugar = await Lugar.create(data, userId);
   res.status(201).json({ data: lugar });
@@ -56,7 +56,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const data = req.body;
-  const userId = req.user.id;
+  const userId = req.user.userId;
   const updatedLugar = await Lugar.update(id, data, userId);
   if (!updatedLugar) throw new AppError('Lugar not found', 404);
   res.json({ data: updatedLugar });
@@ -68,7 +68,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   const deleted = await Lugar.delete(id, userId);
   if (!deleted) throw new AppError('Lugar not found', 404);
   res.json({ message: 'Lugar deleted successfully', data: { id } });

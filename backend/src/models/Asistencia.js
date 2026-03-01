@@ -58,18 +58,29 @@ export class Asistencia {
      * Esto es clave para mostrar la lista de "presentismo".
      */
     static async getEligiblePracticantes(clase) {
-        // Mostramos a TODOS los alumnos del sistema para todas las clases y estados.
-        // Esto permite máxima flexibilidad para anotar a cualquier alumno en cualquier momento.
+        // Mostramos a TODOS los alumnos del sistema para todas las clases y estados,
+        // EXCEPTO a aquellos que están marcados como profesores.
         const sql = `
             SELECT p.id, p.nombre_completo, 
                    MAX(ab.id) as abono_id, 
                    MAX(IFNULL(ta.nombre, 'Sin Abono Activo')) as abono_nombre, 
                    MAX(IFNULL(ta.clases_por_semana, 0)) as clases_por_semana, 
-                   MAX(ta.categoria) as categoria
+                   MAX(IFNULL(ab.cantidad, 0)) as cantidad_total,
+                   MAX(ta.categoria) as categoria,
+                   (
+                       SELECT COUNT(*) 
+                       FROM Asistencia a2 
+                       JOIN Clase c2 ON a2.clase_id = c2.id 
+                       WHERE a2.practicante_id = p.id 
+                         AND a2.asistio = 1 
+                         AND c2.deleted_at IS NULL
+                         AND c2.fecha >= MAX(ab.fecha_inicio)
+                         AND c2.fecha <= MAX(ab.fecha_vencimiento)
+                   ) as consumed_count
             FROM Practicante p
             LEFT JOIN Abono ab ON p.id = ab.practicante_id AND ab.estado = 'activo' AND ab.deleted_at IS NULL
             LEFT JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id
-            WHERE p.deleted_at IS NULL
+            WHERE p.deleted_at IS NULL AND p.es_profesor = 0
             GROUP BY p.id, p.nombre_completo
             ORDER BY p.nombre_completo ASC
         `;

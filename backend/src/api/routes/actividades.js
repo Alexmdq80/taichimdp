@@ -43,7 +43,7 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
  */
 router.post('/', asyncHandler(async (req, res) => {
   const { nombre, descripcion, activo } = req.body;
-  const userId = req.user.id;
+  const userId = req.user.userId;
   if (!nombre) throw new AppError('Nombre is required', 400);
   const actividad = await Actividad.create({ nombre, descripcion, activo }, userId);
   res.status(201).json({ data: actividad });
@@ -56,7 +56,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const data = req.body;
-  const userId = req.user.id;
+  const userId = req.user.userId;
   const updatedActividad = await Actividad.update(id, data, userId);
   if (!updatedActividad) throw new AppError('Actividad not found', 404);
   res.json({ data: updatedActividad });
@@ -68,7 +68,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   const deleted = await Actividad.delete(id, userId);
   if (!deleted) throw new AppError('Actividad not found', 404);
   res.json({ message: 'Actividad deleted successfully', data: { id } });

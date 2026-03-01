@@ -50,7 +50,7 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
  */
 router.post('/', asyncHandler(async (req, res) => {
     const data = sanitizeObject(req.body);
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const newTipoAbono = await TipoAbonoService.create(data, userId);
     res.status(201).json({ message: 'Tipo de abono created successfully', data: newTipoAbono });
 }));
@@ -65,7 +65,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Invalid ID', details: 'ID must be a valid integer' });
     }
     const data = sanitizeObject(req.body);
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const updatedTipoAbono = await TipoAbonoService.update(id, data, userId);
     res.status(200).json({ message: 'Tipo de abono updated successfully', data: updatedTipoAbono });
 }));
@@ -79,7 +79,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid ID', details: 'ID must be a valid integer' });
     }
-    const userId = req.user.id;
+    const userId = req.user.userId;
     await TipoAbonoService.delete(id, userId);
     res.status(200).json({ message: 'Tipo de abono deleted successfully', data: { id } });
 }));

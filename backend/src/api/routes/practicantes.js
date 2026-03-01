@@ -14,7 +14,7 @@ router.use(authenticateToken); // Apply authentication middleware to all routes 
  * List all practicantes with optional search and pagination
  */
 router.get('/', asyncHandler(async (req, res) => {
-  const { search = '', page = 1, limit = 50 } = req.query;
+  const { search = '', page = 1, limit = 50, es_profesor } = req.query;
   
   // Validate pagination parameters
   const pageNum = parseInt(page, 10);
@@ -31,14 +31,30 @@ router.get('/', asyncHandler(async (req, res) => {
   const result = await PracticanteService.findAll({
     search: String(search),
     page: pageNum,
-    limit: limitNum
+    limit: limitNum,
+    es_profesor: es_profesor !== undefined ? es_profesor === 'true' : undefined
   });
 
   res.json(result);
 }));
+router.get('/history', asyncHandler(async (req, res) => {
+  // This is a placeholder, individual history routes are below
+}));
+
+/**
+ * GET /api/practicantes/me
+ * Get current authenticated user's practicante profile
+ */
+router.get('/me', asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+  const practicante = await Practicante.findByUserId(userId);
+  if (!practicante) throw new AppError('No se encontró un perfil de practicante para este usuario', 404);
+  res.json({ data: practicante.toJSON() });
+}));
 
 /**
  * GET /api/practicantes/:id
+...
  * Get practicante by ID
  */
 router.get('/:id', asyncHandler(async (req, res) => {
@@ -72,7 +88,7 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
 router.post('/', asyncHandler(async (req, res) => {
   // Sanitize input
   const data = sanitizeObject(req.body);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   
   const practicante = await PracticanteService.create(data, userId);
   res.status(201).json({ data: practicante });
@@ -84,7 +100,7 @@ router.post('/', asyncHandler(async (req, res) => {
  */
 router.put('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   
   if (isNaN(id)) {
     throw new AppError('Invalid ID: ID must be a valid integer', 400);
@@ -103,7 +119,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   
   if (isNaN(id)) {
     throw new AppError('Invalid ID: ID must be a valid integer', 400);
@@ -122,7 +138,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
  */
 router.post('/:id/pagar', asyncHandler(async (req, res) => {
   const practicanteId = parseInt(req.params.id, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   if (isNaN(practicanteId)) {
     throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
   }
@@ -169,7 +185,7 @@ router.get('/:id/pagos', asyncHandler(async (req, res) => {
  */
 router.delete('/:id/pagos/:pagoId', asyncHandler(async (req, res) => {
   const pagoId = parseInt(req.params.pagoId, 10);
-  const userId = req.user.id;
+  const userId = req.user.userId;
   if (isNaN(pagoId)) {
     throw new AppError('Invalid Pago ID: ID must be a valid integer', 400);
   }
