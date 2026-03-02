@@ -112,7 +112,7 @@ async function checkTeacherAlerts(sociosLink) {
     }
 }
 
-function renderPage(PageClass, params = {}, noLayout = false) {
+async function renderPage(PageClass, params = {}, noLayout = false) {
   const mainContent = document.getElementById('main-content');
   const header = document.querySelector('header');
   const footer = document.querySelector('footer');
@@ -125,6 +125,7 @@ function renderPage(PageClass, params = {}, noLayout = false) {
   if (noLayout) {
     if (header) header.style.display = 'none';
     if (footer) footer.style.display = 'none';
+    updateNavigation(); // Ensure nav is updated even if layout is hidden
   } else {
     if (header) header.style.display = 'block';
     if (footer) footer.style.display = 'block';
@@ -133,8 +134,19 @@ function renderPage(PageClass, params = {}, noLayout = false) {
   
   if (mainContent) {
     mainContent.innerHTML = '<div class="loader text-center p-5">Cargando...</div>';
-    const page = new PageClass(mainContent, params);
-    page.render();
+    try {
+      const page = new PageClass(mainContent, params);
+      await page.render();
+    } catch (error) {
+      console.error('Error rendering page:', error);
+      mainContent.innerHTML = `
+        <div class="alert alert-danger m-5">
+          <h3>Error al cargar la página</h3>
+          <p>${error.message || 'Ocurrió un error inesperado.'}</p>
+          <button class="btn btn-primary" onclick="window.location.reload()">Reintentar</button>
+        </div>
+      `;
+    }
   }
 }
 

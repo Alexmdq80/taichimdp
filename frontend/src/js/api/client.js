@@ -32,13 +32,19 @@ export const makeRequest = async (endpoint, method = 'GET', data = null, authent
         if (!endpoint.startsWith('/auth')) { // Avoid redirect loops on auth endpoints
             localStorage.removeItem('token');
             window.location.href = '/login'; // Redirect to login page
+            return;
         }
     }
 
-    const responseData = await response.json();
+    let responseData;
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+        responseData = await response.json();
+    } else {
+        responseData = { message: await response.text() };
+    }
 
     if (!response.ok) {
-        // If the backend returns an error, it should be in the responseData
         const error = new Error(responseData.message || 'Something went wrong');
         error.details = responseData.details || null;
         error.status = response.status;

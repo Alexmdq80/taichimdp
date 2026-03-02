@@ -29,9 +29,11 @@ class Router {
       if (params !== null) {
         this.currentRoute = path;
         this.params = params;
-        handler(params);
-        // Update URL without page reload
+        
+        // Update URL without page reload BEFORE executing handler
         window.history.pushState({ path }, '', path);
+        
+        handler(params);
         return;
       }
     }
