@@ -70,7 +70,7 @@ export class CostosPage {
 
             <!-- Modal para fecha de pago -->
             <div id="pago-fecha-modal" class="modal" style="display: none;">
-                <div class="modal-content" style="max-width: 400px;">
+                <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
                         <h2>Registrar Fecha de Pago</h2>
                         <span class="close-pago-modal">&times;</span>
@@ -81,6 +81,22 @@ export class CostosPage {
                             <div class="form-group">
                                 <label for="input-fecha-pago">Fecha en que se realizó el pago:</label>
                                 <input type="date" id="input-fecha-pago" class="form-control" required>
+                            </div>
+
+                            <div id="charge-options-section" class="mt-4 p-3 bg-light border rounded" style="display: none;">
+                               <h4>Opciones de Cobro</h4>
+                               <div class="form-check mb-2">
+                                   <input class="form-check-input" type="checkbox" id="charge-salon-cost">
+                                   <label class="form-check-label" for="charge-salon-cost">
+                                       Cargar costo del salón a los practicantes
+                                   </label>
+                               </div>
+                               <div id="practicantes-to-charge-section" style="display: none;">
+                                   <p class="small text-muted mb-2">Seleccione a quién(es) cargar el costo:</p>
+                                   <div id="reserved-practicantes-list" class="pl-4">
+                                       <!-- Practitioners will be loaded here -->
+                                   </div>
+                               </div>
                             </div>
                             <div class="form-actions mt-4">
                                 <button type="submit" class="btn btn-success">Confirmar Pago</button>
@@ -108,6 +124,13 @@ export class CostosPage {
 
         // Pago Modal events
         const modal = this.container.querySelector('#pago-fecha-modal');
+        const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
+        const practicantesSection = this.container.querySelector('#practicantes-to-charge-section');
+
+        chargeSalonCheckbox.onchange = () => {
+            practicantesSection.style.display = chargeSalonCheckbox.checked ? 'block' : 'none';
+        };
+
         this.container.querySelector('.close-pago-modal').onclick = () => modal.style.display = 'none';
         this.container.querySelector('.cancel-pago-modal').onclick = () => modal.style.display = 'none';
         
@@ -115,7 +138,14 @@ export class CostosPage {
             e.preventDefault();
             const id = parseInt(this.container.querySelector('#pago-clase-id').value, 10);
             const fecha = this.container.querySelector('#input-fecha-pago').value;
-            await this.submitPayment(id, true, fecha);
+            
+            const chargeOptions = {
+                cobrar_salon: chargeSalonCheckbox.checked,
+                practicantes_ids: Array.from(this.container.querySelectorAll('.practicante-charge-checkbox:checked'))
+                    .map(cb => parseInt(cb.value, 10))
+            };
+
+            await this.submitPayment(id, true, fecha, chargeOptions);
             modal.style.display = 'none';
         };
 
@@ -151,12 +181,9 @@ export class CostosPage {
     renderSummary() {
         const summaryDiv = this.container.querySelector('#costos-summary');
         
-        // Only count 'realizada' or 'cerrada' for payment summary?
-        // Let's count all non-cancelled for total projection
-        const activeClases = this.clases.filter(c => c.estado !== 'cancelada');
-        
-        const totalCost = activeClases.reduce((acc, c) => acc + this.calculateClassCost(c), 0);
-        const totalPaid = activeClases.filter(c => c.pago_profesor_realizado).reduce((acc, c) => acc + this.calculateClassCost(c), 0);
+        // Count all classes for total projection (including cancelled/suspended since they might have a cost)
+        const totalCost = this.clases.reduce((acc, c) => acc + this.calculateClassCost(c), 0);
+        const totalPaid = this.clases.filter(c => c.pago_profesor_realizado).reduce((acc, c) => acc + this.calculateClassCost(c), 0);
         const totalPending = totalCost - totalPaid;
 
         summaryDiv.innerHTML = `
@@ -164,17 +191,17 @@ export class CostosPage {
                 <div class="card bg-primary text-white p-3 text-center">
                     <h4>Total del Mes</h4>
                     <h2 class="mb-0">$${totalCost.toFixed(2)}</h2>
-                    <small>${activeClases.length} clases activas</small>
+                    <small>${this.clases.length} sesiones en total</small>
                 </div>
                 <div class="card bg-success text-white p-3 text-center">
                     <h4>Total Pagado</h4>
                     <h2 class="mb-0">$${totalPaid.toFixed(2)}</h2>
-                    <small>${activeClases.filter(c => c.pago_profesor_realizado).length} clases liquidadas</small>
+                    <small>${this.clases.filter(c => c.pago_profesor_realizado).length} sesiones liquidadas</small>
                 </div>
                 <div class="card bg-warning text-white p-3 text-center">
                     <h4>Pendiente</h4>
                     <h2 class="mb-0">$${totalPending.toFixed(2)}</h2>
-                    <small>${activeClases.filter(c => !c.pago_profesor_realizado).length} clases por pagar</small>
+                    <small>${this.clases.filter(c => !c.pago_profesor_realizado).length} sesiones por pagar</small>
                 </div>
             </div>
         `;
@@ -205,26 +232,36 @@ export class CostosPage {
                         ${this.clases.map(c => {
                             const cost = this.calculateClassCost(c);
                             const isCancelled = c.estado === 'cancelada';
+                            const isSuspended = c.estado === 'suspendida';
+                            
+                            let estadoBadge = '';
+                            if (c.pago_profesor_realizado) {
+                                estadoBadge = `<span class="badge badge-success" title="Pagado el ${formatDate(c.fecha_pago_profesor)}">PAGADA</span>`;
+                            } else {
+                                estadoBadge = '<span class="badge badge-warning">PENDIENTE</span>';
+                            }
+
+                            if (isCancelled || isSuspended) {
+                                estadoBadge += ` <span class="badge badge-light">${c.estado.toUpperCase()}</span>`;
+                            }
+
                             return `
-                            <tr class="${isCancelled ? 'table-light text-muted' : ''}">
+                            <tr class="${isCancelled || isSuspended ? 'table-light text-muted' : ''}">
                                 <td><strong>${formatDate(c.fecha)}</strong></td>
                                 <td>${c.lugar_nombre}</td>
                                 <td><small>${c.profesor_nombre || '-'}</small></td>
                                 <td>${c.hora.substring(0, 5)} - ${c.hora_fin.substring(0, 5)}</td>
                                 <td><small>$${parseFloat(c.costo_tarifa).toFixed(2)} / ${c.tipo_tarifa === 'por_hora' ? 'h' : 'clase'}</small></td>
-                                <td><strong>$${isCancelled ? '0.00' : cost.toFixed(2)}</strong></td>
+                                <td><strong>$${cost.toFixed(2)}</strong></td>
                                 <td>
-                                    ${isCancelled ? '<span class="badge badge-light">Cancelada</span>' : 
-                                      (c.pago_profesor_realizado 
-                                        ? `<span class="badge badge-success" title="Pagado el ${formatDate(c.fecha_pago_profesor)}">PAGADA</span>` 
-                                        : '<span class="badge badge-warning">PENDIENTE</span>')}
+                                    ${estadoBadge}
                                 </td>
                                 <td>
-                                    ${!isCancelled && !c.pago_profesor_realizado ? `
+                                    ${!c.pago_profesor_realizado ? `
                                         <button class="btn btn-sm btn-success mark-paid-btn" data-id="${c.id}">Marcar Pagada</button>
-                                    ` : (c.pago_profesor_realizado ? `
+                                    ` : `
                                         <button class="btn btn-sm btn-outline-secondary unmark-paid-btn" data-id="${c.id}">Anular Pago</button>
-                                    ` : '-')}
+                                    `}
                                 </td>
                             </tr>
                         `;}).join('')}
@@ -244,9 +281,52 @@ export class CostosPage {
 
     async handleMarkPaid(id, isPaid) {
         if (isPaid) {
+            const clase = this.clases.find(c => c.id === id);
             const modal = this.container.querySelector('#pago-fecha-modal');
+            const chargeSection = this.container.querySelector('#charge-options-section');
+            const practicantesList = this.container.querySelector('#reserved-practicantes-list');
+            const chargeCheckbox = this.container.querySelector('#charge-salon-cost');
+            const practicantesSection = this.container.querySelector('#practicantes-to-charge-section');
+
             this.container.querySelector('#pago-clase-id').value = id;
             this.container.querySelector('#input-fecha-pago').value = new Date().toISOString().split('T')[0];
+            
+            // Reset charge options
+            chargeCheckbox.checked = false;
+            practicantesSection.style.display = 'none';
+            practicantesList.innerHTML = '';
+
+            // If class is flexible AND (cancelled OR suspended), show charge options
+            if (clase && clase.tipo === 'flexible' && (clase.estado === 'cancelada' || clase.estado === 'suspendida')) {
+                try {
+                    // Load reserved students (those marked as 'asistio' in the attendance record)
+                    const response = await apiClient.get(`/asistencia/clases/${id}/practicantes`);
+                    const allPracticantes = response.data;
+                    
+                    // Filter only those who were checked (reserved/present)
+                    const markedPracticantes = allPracticantes.filter(p => p.asistio);
+
+                    if (markedPracticantes.length > 0) {
+                        chargeSection.style.display = 'block';
+                        practicantesList.innerHTML = markedPracticantes.map(p => `
+                            <div class="form-check">
+                                <input class="form-check-input practicante-charge-checkbox" type="checkbox" value="${p.id}" id="sc-${p.id}" checked>
+                                <label class="form-check-label" for="sc-${p.id}">
+                                    ${p.nombre_completo} <small class="text-muted">(${p.abono_nombre})</small>
+                                </label>
+                            </div>
+                        `).join('');
+                    } else {
+                        chargeSection.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error loading practitioners', error);
+                    chargeSection.style.display = 'none';
+                }
+            } else {
+                chargeSection.style.display = 'none';
+            }
+
             modal.style.display = 'block';
         } else {
             if (confirm('¿Desea anular el registro de pago de esta clase?')) {
@@ -255,11 +335,13 @@ export class CostosPage {
         }
     }
 
-    async submitPayment(id, isPaid, fecha) {
+    async submitPayment(id, isPaid, fecha, chargeOptions = {}) {
         try {
             await apiClient.put(`/asistencia/clases/${id}`, {
                 pago_profesor_realizado: isPaid,
-                fecha_pago_profesor: fecha
+                fecha_pago_profesor: fecha,
+                cobrar_salon: chargeOptions.cobrar_salon,
+                practicantes_ids: chargeOptions.practicantes_ids
             });
             showSuccess(isPaid ? 'Clase marcada como pagada' : 'Pago anulado');
             await this.loadData();

@@ -13,11 +13,36 @@ export class PagosPage {
     this.container = container;
     this.pagos = [];
     this.horarios = [];
+    this.tiposAbono = [];
+    this.lugares = [];
     this.searchQuery = '';
     this.categoriaFilter = '';
+    this.mesFilter = '';
+    this.anioFilter = new Date().getFullYear();
+    this.tipoAbonoFilter = '';
+    this.lugarFilter = '';
   }
 
   async render() {
+    // Load initial data for filters if not loaded
+    if (this.tiposAbono.length === 0 || this.lugares.length === 0) {
+        try {
+            const [tiposRes, lugaresRes] = await Promise.all([
+                makeRequest('/tipos-abono', 'GET', null, true),
+                makeRequest('/lugares', 'GET', null, true)
+            ]);
+            this.tiposAbono = tiposRes.data || [];
+            this.lugares = lugaresRes.data || [];
+        } catch (error) {
+            console.error('Error loading filter data:', error);
+        }
+    }
+
+    const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+
     this.container.innerHTML = `
       <div id="pagos-page">
         <div class="flex justify-between items-center" style="margin-bottom: 2rem;">
@@ -29,23 +54,58 @@ export class PagosPage {
         </div>
 
         <div class="card" style="margin-bottom: 2rem;">
-          <div class="flex gap-2 items-center">
-            <input 
-              type="text" 
-              id="pago-search" 
-              placeholder="Buscar por practicante o tipo de abono..." 
-              class="form-control" 
-              style="max-width: 400px;"
-              value="${this.searchQuery}"
-            >
-            <select id="categoria-filter" class="form-control" style="max-width: 200px;">
-                <option value="">Todas las categorías</option>
-                <option value="grupal" ${this.categoriaFilter === 'grupal' ? 'selected' : ''}>Grupal</option>
-                <option value="particular" ${this.categoriaFilter === 'particular' ? 'selected' : ''}>Particular</option>
-                <option value="compartida" ${this.categoriaFilter === 'compartida' ? 'selected' : ''}>Compartida</option>
-                <option value="otro" ${this.categoriaFilter === 'otro' ? 'selected' : ''}>Otro</option>
-            </select>
-            <button id="search-btn" class="btn btn-secondary">Buscar</button>
+          <div class="grid grid-4 gap-2 mb-3">
+            <div class="form-group">
+                <label>Búsqueda</label>
+                <input 
+                  type="text" 
+                  id="pago-search" 
+                  placeholder="Practicante o abono..." 
+                  class="form-control" 
+                  value="${this.searchQuery}"
+                >
+            </div>
+            <div class="form-group">
+                <label>Categoría</label>
+                <select id="categoria-filter" class="form-control">
+                    <option value="">Todas</option>
+                    <option value="grupal" ${this.categoriaFilter === 'grupal' ? 'selected' : ''}>Grupal</option>
+                    <option value="particular" ${this.categoriaFilter === 'particular' ? 'selected' : ''}>Particular</option>
+                    <option value="compartida" ${this.categoriaFilter === 'compartida' ? 'selected' : ''}>Compartida</option>
+                    <option value="otro" ${this.categoriaFilter === 'otro' ? 'selected' : ''}>Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Mes</label>
+                <select id="mes-filter" class="form-control">
+                    <option value="">Todos</option>
+                    ${months.map((m, i) => `<option value="${i + 1}" ${this.mesFilter == (i + 1) ? 'selected' : ''}>${m}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Año</label>
+                <input type="number" id="anio-filter" class="form-control" value="${this.anioFilter}">
+            </div>
+          </div>
+
+          <div class="grid grid-3 gap-2 align-items-end">
+            <div class="form-group">
+                <label>Tipo de Abono</label>
+                <select id="tipo-abono-filter" class="form-control">
+                    <option value="">Todos</option>
+                    ${this.tiposAbono.map(t => `<option value="${t.id}" ${this.tipoAbonoFilter == t.id ? 'selected' : ''}>${t.nombre}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lugar</label>
+                <select id="lugar-filter" class="form-control">
+                    <option value="">Todos</option>
+                    ${this.lugares.map(l => `<option value="${l.id}" ${this.lugarFilter == l.id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <button id="search-btn" class="btn btn-primary btn-block">Aplicar Filtros</button>
+            </div>
           </div>
         </div>
         
@@ -62,20 +122,19 @@ export class PagosPage {
   attachEvents() {
     const searchBtn = this.container.querySelector('#search-btn');
     const searchInput = this.container.querySelector('#pago-search');
-    const categoriaFilter = this.container.querySelector('#categoria-filter');
-
+    
     const triggerSearch = () => {
         this.searchQuery = searchInput.value;
-        this.categoriaFilter = categoriaFilter.value;
+        this.categoriaFilter = this.container.querySelector('#categoria-filter').value;
+        this.mesFilter = this.container.querySelector('#mes-filter').value;
+        this.anioFilter = this.container.querySelector('#anio-filter').value;
+        this.tipoAbonoFilter = this.container.querySelector('#tipo-abono-filter').value;
+        this.lugarFilter = this.container.querySelector('#lugar-filter').value;
         this.loadPagos();
     };
 
     if (searchBtn) {
       searchBtn.addEventListener('click', triggerSearch);
-    }
-
-    if (categoriaFilter) {
-        categoriaFilter.addEventListener('change', triggerSearch);
     }
 
     if (searchInput) {
@@ -85,6 +144,12 @@ export class PagosPage {
         }
       });
     }
+
+    // Auto-trigger on select changes
+    ['#categoria-filter', '#mes-filter', '#tipo-abono-filter', '#lugar-filter'].forEach(selector => {
+        const el = this.container.querySelector(selector);
+        if (el) el.addEventListener('change', triggerSearch);
+    });
   }
 
   async loadPagos() {
@@ -95,6 +160,10 @@ export class PagosPage {
       const params = new URLSearchParams();
       if (this.searchQuery) params.append('search', this.searchQuery);
       if (this.categoriaFilter) params.append('categoria', this.categoriaFilter);
+      if (this.mesFilter) params.append('mes', this.mesFilter);
+      if (this.anioFilter) params.append('anio', this.anioFilter);
+      if (this.tipoAbonoFilter) params.append('tipo_abono_id', this.tipoAbonoFilter);
+      if (this.lugarFilter) params.append('lugar_id', this.lugarFilter);
       
       const [pagoRes, horariosRes] = await Promise.all([
         makeRequest(`/pagos?${params.toString()}`, 'GET', null, true),

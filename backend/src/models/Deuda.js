@@ -81,6 +81,29 @@ export class Deuda {
         ]);
     }
 
+    static async cancelByClaseId(claseId, userId, connection = null) {
+        const executor = connection || pool;
+        
+        // 1. Get all pending debts for this class to record history
+        const sqlFind = 'SELECT * FROM Deuda WHERE clase_id = ? AND estado = "pendiente" AND deleted_at IS NULL';
+        const [rows] = await executor.execute(sqlFind, [claseId]);
+        
+        if (rows.length === 0) return 0;
+
+        // 2. Update status to "cancelada"
+        const sqlUpdate = 'UPDATE Deuda SET estado = "cancelada" WHERE clase_id = ? AND estado = "pendiente" AND deleted_at IS NULL';
+        const [result] = await executor.execute(sqlUpdate, [claseId]);
+
+        // 3. Record history for each cancelled debt
+        for (const row of rows) {
+            const oldData = new Deuda(row).toJSON();
+            const newData = { ...oldData, estado: 'cancelada' };
+            await this.recordHistory(row.id, 'CANCEL', oldData, newData, userId, executor);
+        }
+
+        return result.affectedRows;
+    }
+
     toJSON() {
         return {
             id: this.id,

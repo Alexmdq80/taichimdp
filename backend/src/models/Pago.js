@@ -92,6 +92,26 @@ export class Pago {
             params.push(filters.categoria);
         }
 
+        if (filters.mes) {
+            sql += ' AND MONTH(p.fecha) = ?';
+            params.push(filters.mes);
+        }
+
+        if (filters.anio) {
+            sql += ' AND YEAR(p.fecha) = ?';
+            params.push(filters.anio);
+        }
+
+        if (filters.tipo_abono_id) {
+            sql += ' AND ta.id = ?';
+            params.push(filters.tipo_abono_id);
+        }
+
+        if (filters.lugar_id) {
+            sql += ' AND p.lugar_id = ?';
+            params.push(filters.lugar_id);
+        }
+
         sql += ' ORDER BY p.fecha DESC, p.created_at DESC';
 
         const [rows] = await pool.execute(sql, params);

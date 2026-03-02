@@ -59,7 +59,7 @@ router.get('/clases/:id/practicantes', asyncHandler(async (req, res) => {
  */
 router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const { updates, cobrar_salon } = req.body;
+    const { updates } = req.body;
     const userId = req.user.userId;
 
     const clase = await Clase.findById(id);
@@ -80,29 +80,7 @@ router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
         }
     }
 
-    // Handle salon cost debts
-    if (cobrar_salon && (clase.estado === 'cancelada' || clase.estado === 'suspendida')) {
-        const lugar = await Lugar.findById(clase.lugar_id);
-        if (lugar && lugar.costo_tarifa > 0 && updates && Array.isArray(updates)) {
-            // ONLY create debt for practitioners marked as "present" (checked in the list)
-            for (const u of updates) {
-                if (u.asistio) {
-                    const concepto = `Costo de Salón - Clase ${clase.estado === 'cancelada' ? 'Cancelada' : 'Suspendida'} del ${clase.fecha}`;
-                    
-                    await Deuda.create({
-                        practicante_id: u.practicante_id,
-                        monto: lugar.costo_tarifa,
-                        concepto: concepto,
-                        fecha: clase.fecha,
-                        estado: 'pendiente',
-                        clase_id: clase.id
-                    }, null, userId);
-                }
-            }
-        }
-    }
-
-    res.json({ message: 'Asistencia y deudas procesadas con éxito' });
+    res.json({ message: 'Asistencia procesada con éxito' });
 }));
 
 /**
@@ -112,6 +90,7 @@ router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
 router.put('/clases/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const data = req.body;
+    const userId = req.user.userId;
 
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
@@ -153,6 +132,30 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
     // Actually, the user says "una vez que la clase se marca como 'realizada', se habilite la posibilidad de cerrarla".
     if (data.estado === 'cerrada' && clase.estado !== 'realizada' && clase.estado !== 'cerrada') {
         throw new AppError('Solo se puede cerrar una clase que ya ha sido marcada como "Realizada"', 400);
+    }
+
+    // Handle salon cost charging if requested (only when marking as paid)
+    if (data.pago_profesor_realizado === true && data.cobrar_salon && (clase.estado === 'cancelada' || clase.estado === 'suspendida')) {
+        const lugar = await Lugar.findById(clase.lugar_id);
+        if (lugar && lugar.costo_tarifa > 0 && data.practicantes_ids && Array.isArray(data.practicantes_ids)) {
+            for (const pId of data.practicantes_ids) {
+                const concepto = `Costo de Salón - Clase ${clase.estado === 'cancelada' ? 'Cancelada' : 'Suspendida'} del ${clase.fecha}`;
+                
+                await Deuda.create({
+                    practicante_id: pId,
+                    monto: lugar.costo_tarifa,
+                    concepto: concepto,
+                    fecha: clase.fecha,
+                    estado: 'pendiente',
+                    clase_id: clase.id
+                }, null, userId);
+            }
+        }
+    }
+
+    // NEW: If unmarking professor payment, cancel associated pending debts for this class
+    if (data.pago_profesor_realizado === false && clase.pago_profesor_realizado === true) {
+        await Deuda.cancelByClaseId(clase.id, userId);
     }
 
     const updatedClase = await Clase.update(id, {
