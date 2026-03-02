@@ -105,10 +105,19 @@ export class Socio {
             -- Case 1: Active Abonos
             LEFT JOIN Abono a ON p.id = a.practicante_id AND a.estado = 'activo' AND a.fecha_vencimiento >= CURDATE() AND a.deleted_at IS NULL
             LEFT JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            -- Link Abono to Lugar either directly or via Horarios
+            LEFT JOIN TipoAbono_Horario tah ON ta.id = tah.tipo_abono_id
+            LEFT JOIN Horario ah ON tah.horario_id = ah.id
+            
             -- Case 2: Professors teaching at locations
-            LEFT JOIN Horario h ON p.id = h.profesor_id AND h.deleted_at IS NULL AND h.activo = 1
-            -- Join with Lugar through either TipoAbono or Horario
-            JOIN Lugar l ON (ta.lugar_id = l.id OR h.lugar_id = l.id)
+            LEFT JOIN Horario ph ON p.id = ph.profesor_id AND ph.deleted_at IS NULL AND ph.activo = 1
+            
+            -- Join with Lugar through either direct link, abono schedule, or teaching schedule
+            JOIN Lugar l ON (
+                l.id = ta.lugar_id OR 
+                l.id = ah.lugar_id OR 
+                l.id = ph.lugar_id
+            )
             LEFT JOIN Lugar lp ON l.parent_id = lp.id
             WHERE p.deleted_at IS NULL
               AND (

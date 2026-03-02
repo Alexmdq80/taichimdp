@@ -84,7 +84,14 @@ export class TipoAbono {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT ta.*, l.nombre as lugar_nombre,
+            SELECT ta.*, 
+                   COALESCE(l.nombre, (
+                       SELECT GROUP_CONCAT(DISTINCT l2.nombre SEPARATOR ', ')
+                       FROM TipoAbono_Horario tah
+                       JOIN Horario h2 ON tah.horario_id = h2.id
+                       JOIN Lugar l2 ON h2.lugar_id = l2.id
+                       WHERE tah.tipo_abono_id = ta.id
+                   )) as lugar_nombre,
             (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as horarios_ids
             FROM TipoAbono ta
             LEFT JOIN Lugar l ON ta.lugar_id = l.id
@@ -110,7 +117,14 @@ export class TipoAbono {
      */
     static async findAll() {
         const sql = `
-            SELECT ta.*, l.nombre as lugar_nombre,
+            SELECT ta.*, 
+                   COALESCE(l.nombre, (
+                       SELECT GROUP_CONCAT(DISTINCT l2.nombre SEPARATOR ', ')
+                       FROM TipoAbono_Horario tah
+                       JOIN Horario h2 ON tah.horario_id = h2.id
+                       JOIN Lugar l2 ON h2.lugar_id = l2.id
+                       WHERE tah.tipo_abono_id = ta.id
+                   )) as lugar_nombre,
             (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as horarios_ids
             FROM TipoAbono ta
             LEFT JOIN Lugar l ON ta.lugar_id = l.id
