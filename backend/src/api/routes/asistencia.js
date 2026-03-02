@@ -1,6 +1,8 @@
 import express from 'express';
 import Clase from '../../models/Clase.js';
 import Asistencia from '../../models/Asistencia.js';
+import Deuda from '../../models/Deuda.js';
+import Lugar from '../../models/Lugar.js';
 import AsistenciaService from '../../services/asistenciaService.js';
 import { AppError, asyncHandler } from '../../utils/errors.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -57,7 +59,8 @@ router.get('/clases/:id/practicantes', asyncHandler(async (req, res) => {
  */
 router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const { updates } = req.body;
+    const { updates, cobrar_salon } = req.body;
+    const userId = req.user.userId;
 
     const clase = await Clase.findById(id);
     if (!clase) throw new AppError('Clase no encontrada', 404);
@@ -65,17 +68,6 @@ router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
     // RESTRICTION: Do not allow updates to closed classes
     if (clase.estado === 'cerrada') {
         throw new AppError('No se puede modificar la asistencia de una clase cerrada', 400);
-    }
-
-    // RESTRICTION: Check state based on class type
-    if (clase.tipo === 'grupal') {
-        if (clase.estado !== 'realizada') {
-            throw new AppError('Solo se puede marcar asistencia en clases grupales con estado "Realizada"', 400);
-        }
-    } else {
-        if (clase.estado !== 'programada' && clase.estado !== 'realizada') {
-            throw new AppError('Solo se puede marcar asistencia en clases particulares/compartidas con estado "Programada" o "Realizada"', 400);
-        }
     }
 
     if (updates && Array.isArray(updates)) {
@@ -88,7 +80,29 @@ router.post('/clases/:id/practicantes', asyncHandler(async (req, res) => {
         }
     }
 
-    res.json({ message: 'Asistencia actualizada con éxito' });
+    // Handle salon cost debts
+    if (cobrar_salon && (clase.estado === 'cancelada' || clase.estado === 'suspendida')) {
+        const lugar = await Lugar.findById(clase.lugar_id);
+        if (lugar && lugar.costo_tarifa > 0 && updates && Array.isArray(updates)) {
+            // ONLY create debt for practitioners marked as "present" (checked in the list)
+            for (const u of updates) {
+                if (u.asistio) {
+                    const concepto = `Costo de Salón - Clase ${clase.estado === 'cancelada' ? 'Cancelada' : 'Suspendida'} del ${clase.fecha}`;
+                    
+                    await Deuda.create({
+                        practicante_id: u.practicante_id,
+                        monto: lugar.costo_tarifa,
+                        concepto: concepto,
+                        fecha: clase.fecha,
+                        estado: 'pendiente',
+                        clase_id: clase.id
+                    }, null, userId);
+                }
+            }
+        }
+    }
+
+    res.json({ message: 'Asistencia y deudas procesadas con éxito' });
 }));
 
 /**

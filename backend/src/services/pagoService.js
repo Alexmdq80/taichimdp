@@ -2,6 +2,8 @@ import Pago from '../models/Pago.js';
 import Practicante from '../models/Practicante.js';
 import TipoAbono from '../models/TipoAbono.js';
 import Abono from '../models/Abono.js';
+import Socio from '../models/Socio.js';
+import PagoSocio from '../models/PagoSocio.js';
 import { AppError } from '../utils/errors.js';
 import pool from '../config/database.js'; // Import pool to get connection
 
@@ -91,18 +93,91 @@ export class PagoService {
             const newAbono = await Abono.create(abonoData, connection, userId);
 
             // 4. Create Pago record linked to the new Abono
+            let totalMonto = (tipoAbono.precio || 0) * cantidad;
+            let finalNotas = notas || '';
+
+            // Handle Social Fee if requested - Only sum the money and add a note
+            if (extraData.cuota_social) {
+                const cs = extraData.cuota_social;
+                totalMonto += parseFloat(cs.monto || 0);
+                const socialFeeNote = `[RECIBIDO CUOTA SOCIAL: $${cs.monto}]`;
+                finalNotas = finalNotas ? `${finalNotas} | ${socialFeeNote}` : socialFeeNote;
+            }
+
             const pagoData = {
                 practicante_id: practicanteId,
                 abono_id: newAbono.id, // Linked to the newly created Abono
                 mes_abono: abonoData.mes_abono,
                 lugar_id: abonoData.lugar_id,
                 fecha: fechaPagoStr,
-                monto: (tipoAbono.precio || 0) * cantidad,
+                monto: totalMonto,
                 metodo_pago: metodoPago,
-                notas: notas
+                notas: finalNotas
             };
 
             // Pass userId to create method for history
+            const newPago = await Pago.create(pagoData, connection, userId);
+
+            await connection.commit();
+            return newPago;
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    }
+
+    /**
+     * Create a payment that is only for a social fee (no abono)
+     * @param {number} practicanteId 
+     * @param {number} lugarId 
+     * @param {number} monto 
+     * @param {string} fechaPago - YYYY-MM-DD
+     * @param {string} mesAbono - e.g. "Marzo 2026"
+     * @param {string} metodoPago 
+     * @param {string} notas 
+     * @param {number} userId 
+     */
+    static async createSocialFeeOnlyPayment(practicanteId, lugarId, monto, fechaPago, mesAbono, metodoPago, notas, userId) {
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // 1. Record in Socio file as "Received from student"
+            let pagoSocioId = null;
+            const socio = await Socio.findByPracticanteAndLugar(practicanteId, lugarId, connection);
+            if (socio) {
+                // Duplication Check
+                const alreadyPaid = await PagoSocio.existsForSocioAndMonth(socio.id, mesAbono);
+                if (alreadyPaid) {
+                    throw new AppError(`Ya existe una cuota social registrada para ${mesAbono} para este practicante en esta sede.`, 400);
+                }
+
+                const newPagoSocio = await PagoSocio.create({
+                    socio_id: socio.id,
+                    monto: monto,
+                    mes_abono: mesAbono,
+                    fecha_pago: null,
+                    fecha_vencimiento: null,
+                    observaciones: null
+                }, connection, userId);
+                pagoSocioId = newPagoSocio.id;
+            }
+
+            // 2. General Cash Register (Pago) linked to PagoSocio
+            const pagoData = {
+                practicante_id: practicanteId,
+                abono_id: null,
+                pago_socio_id: pagoSocioId,
+                mes_abono: mesAbono,
+                lugar_id: lugarId,
+                fecha: fechaPago,
+                monto: monto,
+                metodo_pago: metodoPago,
+                notas: `[PAGO ÚNICO: CUOTA SOCIAL] ${notas || ''}`.trim()
+            };
+
             const newPago = await Pago.create(pagoData, connection, userId);
 
             await connection.commit();
@@ -134,6 +209,17 @@ export class PagoService {
     }
 
     /**
+     * Update a payment's basic information
+     * @param {number} pagoId - ID of the payment to update
+     * @param {Object} data - Updated data
+     * @param {number} [userId=null] - User ID
+     * @returns {Promise<Pago|null>}
+     */
+    static async updatePayment(pagoId, data, userId = null) {
+        return await Pago.update(pagoId, data, null, userId);
+    }
+
+    /**
      * Delete (soft-delete) a payment and cancel its related abono
      * @param {number} pagoId - ID of the payment to delete
      * @param {number} [userId=null] - ID of the user deleting the payment
@@ -155,6 +241,11 @@ export class PagoService {
             // 2. Mark related abono as 'cancelado' if it exists
             if (pago.abono_id) {
                 await Abono.updateStatus(pago.abono_id, 'cancelado', connection, userId);
+            }
+
+            // 3. Delete related PagoSocio if it exists
+            if (pago.pago_socio_id) {
+                await PagoSocio.delete(pago.pago_socio_id, connection, userId);
             }
 
             await connection.commit();

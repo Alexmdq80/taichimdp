@@ -16,6 +16,8 @@ export class PracticanteList {
       onEdit: options.onEdit || (() => {}),
       onDelete: options.onDelete || (() => {}),
       onShowHistory: options.onShowHistory || (() => {}),
+      onReceiveCuota: options.onReceiveCuota || (() => {}),
+      onPayAbono: options.onPayAbono || (() => {}),
     };
     this.practicantes = [];
     this.currentPage = 1;
@@ -146,6 +148,16 @@ export class PracticanteList {
                 >
                   Pagar Abono
                 </button>
+                ${practicante.socio_count > 0 ? `
+                <button 
+                  class="btn btn-success" 
+                  data-action="cuota" 
+                  data-id="${practicante.id}"
+                  style="margin-right: 0.5rem;"
+                >
+                  Recibir Cuota
+                </button>
+                ` : ''}
                 <button 
                   class="btn" 
                   data-action="view" 
@@ -265,7 +277,10 @@ export class PracticanteList {
         }
         break;
       case 'pay': // Handle the new 'pay' action
-        navigate(`/practicantes/${practicante.id}/pagar`); // Navigate to the payment URL
+        this.options.onPayAbono(practicante);
+        break;
+      case 'cuota':
+        this.options.onReceiveCuota(practicante);
         break;
     }
   }

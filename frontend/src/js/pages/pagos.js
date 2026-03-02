@@ -158,7 +158,17 @@ export class PagosPage {
         <tbody>
           ${this.pagos.map(pago => {
             const isVencimientoReal = pago.fecha_vencimiento && !pago.fecha_vencimiento.startsWith('2099');
+            const isCuotaSocial = !pago.categoria && pago.tipo_abono_nombre === 'Recepción Cuota Social';
             
+            let vencimientoHtml = '';
+            if (isVencimientoReal) {
+                vencimientoHtml = formatDateReadable(pago.fecha_vencimiento);
+            } else if (isCuotaSocial) {
+                vencimientoHtml = '<em class="text-muted">a determinar...</em>';
+            } else {
+                vencimientoHtml = '<em class="text-muted">Flexible</em>';
+            }
+
             return `
             <tr>
               <td>
@@ -166,7 +176,9 @@ export class PagosPage {
                   ${this.escapeHtml(pago.practicante_nombre || 'Desconocido')}
                 </a>
               </td>
-              <td><span class="badge ${this.getBadgeClass(pago.categoria)}">${this.formatCategoria(pago.categoria)}</span></td>
+              <td>
+                ${pago.categoria ? `<span class="badge ${this.getBadgeClass(pago.categoria)}">${this.formatCategoria(pago.categoria)}</span>` : ''}
+              </td>
               <td>
                 <strong>${this.escapeHtml(pago.tipo_abono_nombre || 'Desconocido')}</strong>
                 ${pago.mes_abono ? `<br><small class="text-muted">Mes: ${pago.mes_abono}</small>` : ''}
@@ -176,7 +188,7 @@ export class PagosPage {
               </td>
               <td>$${parseFloat(pago.monto).toFixed(2)}</td>
               <td>${formatDateReadable(pago.fecha)}</td>
-              <td>${isVencimientoReal ? formatDateReadable(pago.fecha_vencimiento) : '<em class="text-muted">Flexible</em>'}</td>
+              <td>${vencimientoHtml}</td>
               <td>${pago.metodo_pago || '-'}</td>
               <td>
                 <button class="btn btn-danger btn-sm delete-pago-btn" data-id="${pago.id}">Eliminar</button>
@@ -247,6 +259,7 @@ export class PagosPage {
   }
 
   formatCategoria(categoria) {
+    if (!categoria) return '';
     const map = {
       'grupal': 'Grupal',
       'particular': 'Particular',

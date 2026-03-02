@@ -5,14 +5,12 @@ import { formatDateReadable, formatDate } from '../utils/formatting.js';
 export class SociosPage {
     constructor(container) {
         this.container = container;
-        this.view = 'list'; // 'list', 'candidates', 'payments', 'my-socios'
+        this.view = 'list'; // 'list', 'candidates', 'payments'
         this.socios = [];
-        this.mySocios = [];
         this.candidates = [];
         this.payments = [];
         this.selectedSocio = null;
         this.searchQuery = '';
-        this.currentUserPracticante = null;
     }
 
     async render() {
@@ -25,12 +23,11 @@ export class SociosPage {
                         Candidatos a Socio 
                         <span id="candidates-count" class="badge badge-light ml-1" style="display:none">0</span>
                     </button>
-                    <button id="view-my-socios-btn" class="btn ${this.view === 'my-socios' ? 'btn-primary' : 'btn-outline-primary'}">Mis Membresías (Costos)</button>
-                    ${this.view === 'payments' ? '<button id="view-payments-btn" class="btn btn-primary">Pagos de Cuota Social</button>' : ''}
+                    ${this.view === 'payments' ? '<button id="view-payments-btn" class="btn btn-primary">Historial Cuotas</button>' : ''}
                 </div>
             </div>
 
-            <div class="card mb-4" style="display: ${this.view === 'payments' || this.view === 'my-socios' ? 'none' : 'block'}">
+            <div class="card mb-4" style="display: ${this.view === 'payments' ? 'none' : 'block'}">
                 <div class="flex gap-2 items-center">
                     <input type="text" id="socio-search" placeholder="Buscar por nombre o número de socio..." class="form-control" style="max-width: 400px;" value="${this.searchQuery}">
                     <button id="search-btn" class="btn btn-secondary">Buscar</button>
@@ -94,6 +91,12 @@ export class SociosPage {
                                 <p id="pago-display-socio-nombre" class="form-control-plaintext"></p>
                             </div>
 
+                            <div id="pago-duplicate-warning" class="alert alert-warning" style="display: none;">
+                                <i class="fas fa-exclamation-triangle"></i> <strong>Atención:</strong> Ya existe un registro para este mes y año. No se permite duplicar el pago.
+                            </div>
+
+                            <div id="cobros-pendientes-section" style="display: none;"></div>
+
                             <div class="form-group">
                                 <label for="pago-tipo-monto">Tipo de Cuota</label>
                                 <select id="pago-tipo-monto" class="form-control">
@@ -115,7 +118,7 @@ export class SociosPage {
                             </div>
 
                             <div class="form-row">
-                                <div class="form-group col-md-4">
+                                <div class="form-group col-md-3">
                                     <label for="pago-mes">Mes que Abona</label>
                                     <select id="pago-mes" class="form-control" required>
                                         <option value="Enero">Enero</option>
@@ -132,7 +135,7 @@ export class SociosPage {
                                         <option value="Diciembre">Diciembre</option>
                                     </select>
                                 </div>
-                                <div class="form-group col-md-2">
+                                <div class="form-group col-md-3">
                                     <label for="pago-anio">Año</label>
                                     <input type="number" id="pago-anio" class="form-control" required value="${new Date().getFullYear()}">
                                 </div>
@@ -155,6 +158,52 @@ export class SociosPage {
                     </div>
                 </div>
             </div>
+
+            <!-- Modal para COMPLETAR información de pago (alumnos) -->
+            <div id="pago-completar-modal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h2>Completar Información de Cuota</h2>
+                        <span class="close-completar-modal">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <form id="pago-completar-form">
+                            <input type="hidden" id="completar-pago-id">
+                            
+                            <div class="form-group">
+                                <label><strong>Socio:</strong></label>
+                                <p id="completar-display-socio" class="form-control-plaintext"></p>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><strong>Mes que abonó:</strong></label>
+                                <p id="completar-display-mes" class="form-control-plaintext"></p>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label for="completar-fecha">Fecha de Pago (Efectiva)</label>
+                                    <input type="date" id="completar-fecha" class="form-control" required>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label for="completar-vencimiento">Próximo Vencimiento</label>
+                                    <input type="date" id="completar-vencimiento" class="form-control" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="completar-observaciones">Observaciones (Opcional)</label>
+                                <textarea id="completar-observaciones" class="form-control" rows="2"></textarea>
+                            </div>
+
+                            <div class="form-actions mt-4">
+                                <button type="submit" class="btn btn-primary">Guardar Información</button>
+                                <button type="button" class="btn btn-secondary cancel-completar-modal">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         `;
 
         this.attachEvents();
@@ -170,12 +219,6 @@ export class SociosPage {
 
         this.container.querySelector('#view-candidates-btn').addEventListener('click', () => {
             this.view = 'candidates';
-            this.selectedSocio = null;
-            this.render();
-        });
-
-        this.container.querySelector('#view-my-socios-btn').addEventListener('click', () => {
-            this.view = 'my-socios';
             this.selectedSocio = null;
             this.render();
         });
@@ -205,33 +248,114 @@ export class SociosPage {
 
         // Pago Modal events
         const pagoModal = this.container.querySelector('#pago-socio-modal');
-        this.container.querySelector('.close-pago-modal').onclick = () => pagoModal.style.display = 'none';
-        this.container.querySelector('.cancel-pago-modal').onclick = () => pagoModal.style.display = 'none';
-        this.container.querySelector('#pago-socio-form').onsubmit = async (e) => {
-            e.preventDefault();
-            await this.handleSavePago();
-        };
+        if (pagoModal) {
+            this.container.querySelector('.close-pago-modal').onclick = () => pagoModal.style.display = 'none';
+            this.container.querySelector('.cancel-pago-modal').onclick = () => pagoModal.style.display = 'none';
+            this.container.querySelector('#pago-socio-form').onsubmit = async (e) => {
+                e.preventDefault();
+                await this.handleSavePago();
+            };
 
-        const tipoMontoSelect = this.container.querySelector('#pago-tipo-monto');
-        if (tipoMontoSelect) {
-            tipoMontoSelect.addEventListener('change', () => {
-                const montoInput = this.container.querySelector('#pago-monto');
-                if (tipoMontoSelect.value === 'general') {
-                    montoInput.value = this.selectedSocio.cuota_social_general;
-                    montoInput.readOnly = true;
-                } else if (tipoMontoSelect.value === 'descuento') {
-                    montoInput.value = this.selectedSocio.cuota_social_descuento;
-                    montoInput.readOnly = true;
-                } else {
-                    montoInput.readOnly = false;
-                }
-            });
+            const tipoMontoSelect = this.container.querySelector('#pago-tipo-monto');
+            if (tipoMontoSelect) {
+                tipoMontoSelect.addEventListener('change', () => {
+                    const montoInput = this.container.querySelector('#pago-monto');
+                    if (tipoMontoSelect.value === 'general') {
+                        montoInput.value = this.selectedSocio.cuota_social_general;
+                        montoInput.readOnly = true;
+                    } else if (tipoMontoSelect.value === 'descuento') {
+                        montoInput.value = this.selectedSocio.cuota_social_descuento;
+                        montoInput.readOnly = true;
+                    } else {
+                        montoInput.readOnly = false;
+                    }
+                });
+            }
+
+            // Duplicate checking listeners
+            const monthSelect = this.container.querySelector('#pago-mes');
+            const yearInput = this.container.querySelector('#pago-anio');
+            if (monthSelect && yearInput) {
+                const triggerCheck = () => this.checkDuplicatePayment();
+                monthSelect.addEventListener('change', triggerCheck);
+                yearInput.addEventListener('input', triggerCheck);
+            }
+        }
+
+        // Completar Modal events
+        const completarModal = this.container.querySelector('#pago-completar-modal');
+        if (completarModal) {
+            this.container.querySelector('.close-completar-modal').onclick = () => completarModal.style.display = 'none';
+            this.container.querySelector('.cancel-completar-modal').onclick = () => completarModal.style.display = 'none';
+            this.container.querySelector('#pago-completar-form').onsubmit = async (e) => {
+                e.preventDefault();
+                await this.handleUpdatePago();
+            };
         }
 
         window.onclick = (event) => {
             if (event.target == socioModal) socioModal.style.display = 'none';
             if (event.target == pagoModal) pagoModal.style.display = 'none';
+            if (event.target == completarModal) completarModal.style.display = 'none';
         };
+    }
+
+    openCompletePagoModal(pagoId) {
+        const pago = this.payments.find(p => p.id === pagoId);
+        if (!pago) return;
+
+        const modal = this.container.querySelector('#pago-completar-modal');
+        this.container.querySelector('#completar-pago-id').value = pago.id;
+        this.container.querySelector('#completar-display-socio').textContent = this.selectedSocio.nombre_completo;
+        this.container.querySelector('#completar-display-mes').textContent = pago.mes_abono;
+        
+        const today = new Date();
+        this.container.querySelector('#completar-fecha').value = formatDate(today);
+        
+        // Suggest next vencimiento based on today (usually 10th of next month)
+        const suggestedVenc = new Date(today.getFullYear(), today.getMonth() + 1, 10);
+        this.container.querySelector('#completar-vencimiento').value = formatDate(suggestedVenc);
+        this.container.querySelector('#completar-observaciones').value = "";
+
+        modal.style.display = 'block';
+    }
+
+    async handleUpdatePago() {
+        const id = this.container.querySelector('#completar-pago-id').value;
+        const data = {
+            fecha_pago: this.container.querySelector('#completar-fecha').value,
+            fecha_vencimiento: this.container.querySelector('#completar-vencimiento').value,
+            observaciones: this.container.querySelector('#completar-observaciones').value
+        };
+
+        try {
+            await apiClient.put(`/pagos-socios/${id}`, data);
+            showSuccess('Información de cuota completada');
+            this.container.querySelector('#pago-completar-modal').style.display = 'none';
+            await this.loadData();
+        } catch (error) {
+            displayApiError(error);
+        }
+    }
+
+    checkDuplicatePayment() {
+        const month = this.container.querySelector('#pago-mes').value;
+        const year = this.container.querySelector('#pago-anio').value;
+        const warning = this.container.querySelector('#pago-duplicate-warning');
+        const submitBtn = this.container.querySelector('#pago-socio-form button[type="submit"]');
+        
+        const mesAbono = `${month} ${year}`;
+        const isDuplicate = this.payments.some(p => p.mes_abono === mesAbono);
+        
+        if (isDuplicate) {
+            warning.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+        } else {
+            warning.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+        }
     }
 
     async loadData() {
@@ -249,8 +373,6 @@ export class SociosPage {
                 const response = await apiClient.get('/pagos-socios', { socio_id: this.selectedSocio.id });
                 this.payments = response.data;
                 this.renderPayments(content);
-            } else if (this.view === 'my-socios') {
-                await this.loadMySocios(content);
             }
 
             // Always update candidates count badge
@@ -262,144 +384,6 @@ export class SociosPage {
             }
         } catch (error) {
             displayApiError(error, content);
-        }
-    }
-
-    async loadMySocios(content) {
-        try {
-            // Identify the current user as a practicante using the dedicated endpoint
-            if (!this.currentUserPracticante) {
-                try {
-                    const meRes = await apiClient.get('/practicantes/me');
-                    this.currentUserPracticante = meRes.data;
-                } catch (err) {
-                    console.warn('Could not identify user via /me, falling back to token data');
-                    // Fallback to old identification method just in case
-                    const tokenData = this.getPayloadFromToken();
-                    if (tokenData && tokenData.userId) {
-                        const searchRes = await apiClient.get('/practicantes', { limit: 1000 });
-                        this.currentUserPracticante = searchRes.data.find(p => p.user_id === tokenData.userId);
-                    }
-                }
-            }
-
-            if (!this.currentUserPracticante) {
-                content.innerHTML = `
-                    <div class="alert alert-warning">
-                        <p>No se ha podido identificar su registro como practicante/profesor automáticamente.</p>
-                        <p>Para gestionar sus membresías, debe estar registrado en la sección de <strong>"Practicantes"</strong> con su correo electrónico de usuario.</p>
-                        <hr>
-                        <button id="go-practicantes-btn" class="btn btn-primary">Ir a Practicantes para registrarme</button>
-                    </div>
-                `;
-                this.container.querySelector('#go-practicantes-btn').onclick = () => {
-                    import('../router.js').then(m => m.navigate('/practicantes'));
-                };
-                return;
-            }
-
-            // Get locations where the user teaches
-            const teacherLugaresRes = await apiClient.get('/socios/my-teacher-lugares');
-            const teacherLugares = teacherLugaresRes.data;
-
-            // Get existing memberships for the user
-            const mySociosRes = await apiClient.get('/socios', { practicante_id: this.currentUserPracticante.id });
-            this.mySocios = mySociosRes.data;
-
-            // Map teaching locations with their membership info
-            const membershipData = teacherLugares.map(lugar => {
-                const socio = this.mySocios.find(s => s.lugar_id === lugar.id);
-                return { ...lugar, socio };
-            });
-
-            this.renderMySociosList(content, membershipData);
-        } catch (error) {
-            displayApiError(error, content);
-        }
-    }
-
-    renderMySociosList(content, membershipData) {
-        content.innerHTML = `
-            <div class="card bg-dark text-white mb-4">
-                <div class="card-body">
-                    <h3 class="mb-0">Mis Membresías (Profesor / Socio)</h3>
-                    <p class="mb-0 text-light">Lugares donde dicta clases y su estado de socio.</p>
-                </div>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Lugar (Sede)</th>
-                            <th>Estado</th>
-                            <th>Nº Socio</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${membershipData.length === 0 ? '<tr><td colspan="4" class="text-center p-4">No se han detectado clases dictadas por usted en ningún lugar todavía.</td></tr>' : ''}
-                        ${membershipData.map(item => `
-                            <tr>
-                                <td><strong>${item.nombre}</strong></td>
-                                <td>
-                                    ${item.socio 
-                                        ? '<span class="badge badge-success">Registrado</span>' 
-                                        : '<span class="badge badge-warning">No Registrado</span>'}
-                                </td>
-                                <td>
-                                    ${item.socio 
-                                        ? `<span class="badge badge-info">${item.socio.numero_socio}</span>` 
-                                        : '-'}
-                                </td>
-                                <td>
-                                    ${item.socio 
-                                        ? `<button class="btn btn-sm btn-success view-my-payments-btn" data-id="${item.socio.id}"><i class="fas fa-money-bill-wave"></i> Mis Pagos (Costos)</button>`
-                                        : `<button class="btn btn-sm btn-primary register-me-socio-btn" 
-                                            data-lugar-id="${item.id}" 
-                                            data-lugar-nombre="${item.nombre}">
-                                            Registrarme como Socio
-                                           </button>`
-                                    }
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        content.querySelectorAll('.view-my-payments-btn').forEach(btn => {
-            btn.onclick = () => {
-                this.selectedSocio = this.mySocios.find(s => s.id === parseInt(btn.dataset.id));
-                this.view = 'payments';
-                this.isViewingCosts = true;
-                this.render();
-            };
-        });
-
-        content.querySelectorAll('.register-me-socio-btn').forEach(btn => {
-            btn.onclick = () => {
-                this.openRegisterSocioModal(
-                    this.currentUserPracticante.id, 
-                    this.currentUserPracticante.nombre_completo, 
-                    parseInt(btn.dataset.lugarId), 
-                    btn.dataset.lugarNombre
-                );
-            };
-        });
-    }
-
-    getPayloadFromToken() {
-        const token = localStorage.getItem('token');
-        if (!token) return null;
-        try {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-            return JSON.parse(jsonPayload);
-        } catch (e) {
-            return null;
         }
     }
 
@@ -426,7 +410,9 @@ export class SociosPage {
                             <td>${s.lugar_nombre}</td>
                             <td><span class="badge badge-info">${s.numero_socio}</span></td>
                             <td>
-                                <button class="btn btn-sm btn-success view-payments-btn" data-id="${s.id}"><i class="fas fa-money-bill-wave"></i> Cuotas</button>
+                                <button class="btn btn-sm btn-outline-info view-payments-btn" data-id="${s.id}"><i class="fas fa-history"></i> Historial</button>
+                                ${s.es_profesor ? `<button class="btn btn-sm btn-success pay-cuota-btn" data-id="${s.id}"><i class="fas fa-money-bill-wave"></i> Registrar Pago</button>` : ''}
+                                ${!s.es_profesor ? `<button class="btn btn-sm btn-warning complete-shortcut-btn" data-id="${s.id}"><i class="fas fa-check-circle"></i> Completar Pago</button>` : ''}
                                 <button class="btn btn-sm btn-outline-primary edit-socio-btn" data-id="${s.id}">Editar</button>
                                 <button class="btn btn-sm btn-outline-danger delete-socio-btn" data-id="${s.id}">Eliminar</button>
                             </td>
@@ -437,6 +423,28 @@ export class SociosPage {
         `;
 
         content.querySelectorAll('.view-payments-btn').forEach(btn => {
+            btn.onclick = () => {
+                this.selectedSocio = this.socios.find(s => s.id === parseInt(btn.dataset.id));
+                this.view = 'payments';
+                this.render();
+            };
+        });
+
+        content.querySelectorAll('.pay-cuota-btn').forEach(btn => {
+            btn.onclick = async () => {
+                this.selectedSocio = this.socios.find(s => s.id === parseInt(btn.dataset.id));
+                try {
+                    // Fetch history to allow frontend validation of duplicates
+                    const response = await apiClient.get('/pagos-socios', { socio_id: this.selectedSocio.id });
+                    this.payments = response.data;
+                    this.openAddPagoModal();
+                } catch (error) {
+                    displayApiError(error);
+                }
+            };
+        });
+
+        content.querySelectorAll('.complete-shortcut-btn').forEach(btn => {
             btn.onclick = () => {
                 this.selectedSocio = this.socios.find(s => s.id === parseInt(btn.dataset.id));
                 this.view = 'payments';
@@ -500,18 +508,15 @@ export class SociosPage {
     }
 
     renderPayments(content) {
-        const isCost = !!this.isViewingCosts;
-        
         content.innerHTML = `
-            <div class="card mb-4 ${isCost ? 'bg-dark text-white' : 'bg-light'}">
+            <div class="card mb-4 bg-light">
                 <div class="flex justify-between items-center">
                     <div>
-                        <h3>${isCost ? 'Mis Cuotas Sociales (Costo)' : 'Historial de Cuotas Sociales'}</h3>
-                        <p class="${isCost ? 'text-light' : ''}"><strong>Socio:</strong> ${this.selectedSocio.nombre_completo} | <strong>Lugar:</strong> ${this.selectedSocio.lugar_nombre} | <strong>Nº:</strong> ${this.selectedSocio.numero_socio}</p>
+                        <h3>Historial de Cuotas Sociales</h3>
+                        <p><strong>Socio:</strong> ${this.selectedSocio.nombre_completo} | <strong>Lugar:</strong> ${this.selectedSocio.lugar_nombre} | <strong>Nº:</strong> ${this.selectedSocio.numero_socio}</p>
                     </div>
                     <div>
-                        <button id="add-pago-btn" class="btn btn-success">Registrar Nueva Cuota</button>
-                        ${isCost ? '<button id="back-to-my-socios" class="btn btn-outline-light ml-2">Volver a mis membresías</button>' : ''}
+                        <button id="back-to-list" class="btn btn-outline-secondary ml-2">Volver al listado</button>
                     </div>
                 </div>
             </div>
@@ -532,14 +537,19 @@ export class SociosPage {
                         ${this.payments.length === 0 ? '<tr><td colspan="6" class="text-center p-4 text-muted">No hay cuotas registradas.</td></tr>' : ''}
                         ${this.payments.map(p => `
                             <tr>
-                                <td>${formatDateReadable(p.fecha_pago)}</td>
+                                <td>${p.fecha_pago ? formatDateReadable(p.fecha_pago) : '-'}</td>
                                 <td><strong>${p.mes_abono}</strong></td>
                                 <td>$${parseFloat(p.monto).toFixed(2)}</td>
-                                <td class="${new Date(p.fecha_vencimiento) < new Date() ? 'text-danger font-weight-bold' : ''}">
-                                    ${formatDateReadable(p.fecha_vencimiento)}
+                                <td class="${p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'text-danger font-weight-bold' : ''}">
+                                    ${p.fecha_vencimiento ? formatDateReadable(p.fecha_vencimiento) : '<em class="text-muted">a determinar...</em>'}
                                 </td>
-                                <td><span class="badge ${p.es_costo ? 'badge-danger' : 'badge-secondary'}">${p.es_costo ? 'Costo' : 'Registro'}</span></td>
                                 <td>
+                                    <span class="badge ${p.es_profesor ? 'badge-danger' : 'badge-secondary'}">
+                                        ${p.es_profesor ? 'Costo Profesor' : 'Cobro Socio'}
+                                    </span>
+                                </td>
+                                <td>
+                                    ${!p.fecha_pago ? `<button class="btn btn-sm btn-warning complete-pago-btn" data-id="${p.id}"><i class="fas fa-edit"></i> Completar</button>` : ''}
                                     <button class="btn btn-sm btn-outline-danger delete-pago-btn" data-id="${p.id}">Eliminar</button>
                                 </td>
                             </tr>
@@ -549,14 +559,15 @@ export class SociosPage {
             </div>
         `;
 
-        this.container.querySelector('#add-pago-btn').onclick = () => this.openAddPagoModal();
-        if (isCost) {
-            this.container.querySelector('#back-to-my-socios').onclick = () => {
-                this.view = 'my-socios';
-                this.isViewingCosts = false;
-                this.render();
-            };
-        }
+        this.container.querySelector('#back-to-list').onclick = () => {
+            this.view = 'list';
+            this.render();
+        };
+        
+        content.querySelectorAll('.complete-pago-btn').forEach(btn => {
+            btn.onclick = () => this.openCompletePagoModal(parseInt(btn.dataset.id));
+        });
+
         content.querySelectorAll('.delete-pago-btn').forEach(btn => {
             btn.onclick = () => this.handleDeletePago(parseInt(btn.dataset.id));
         });
@@ -621,14 +632,15 @@ export class SociosPage {
     // Pago Modal Handlers
     openAddPagoModal() {
         const modal = this.container.querySelector('#pago-socio-modal');
-        this.container.querySelector('#pago-modal-title').textContent = 'Registrar Pago de Cuota Social';
+        
+        this.container.querySelector('#pago-modal-title').textContent = 'Registrar Pago al Club (Costo Profesor)';
         this.container.querySelector('#pago-display-socio-nombre').textContent = `${this.selectedSocio.nombre_completo} (${this.selectedSocio.lugar_nombre})`;
         
         // Initialize amount selection
         const tipoMontoSelect = this.container.querySelector('#pago-tipo-monto');
         const montoInput = this.container.querySelector('#pago-monto');
         
-        // Default to discount if it's > 0, otherwise general
+        // Default values for amounts
         if (this.selectedSocio.cuota_social_descuento > 0) {
             tipoMontoSelect.value = 'descuento';
             montoInput.value = this.selectedSocio.cuota_social_descuento;
@@ -638,26 +650,21 @@ export class SociosPage {
         }
         montoInput.readOnly = true;
 
-        // Default values
+        // Default values for dates
         const today = new Date();
         this.container.querySelector('#pago-fecha').value = formatDate(today);
         
-        // Suggest month and next vencimiento
         const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        
         this.container.querySelector('#pago-mes').value = months[today.getMonth()];
         this.container.querySelector('#pago-anio').value = today.getFullYear();
         
-        let suggestedVenc = new Date(today.getFullYear(), today.getMonth() + 1, 10); // Sugerir el 10 del mes que viene
-
-        if (this.payments.length > 0) {
-            const lastPago = this.payments[0];
-            const lastVenc = new Date(lastPago.fecha_vencimiento);
-            suggestedVenc = new Date(lastVenc.getFullYear(), lastVenc.getMonth() + 1, lastVenc.getDate());
-        }
+        let suggestedVenc = new Date(today.getFullYear(), today.getMonth() + 1, 10); 
 
         this.container.querySelector('#pago-vencimiento').value = formatDate(suggestedVenc);
         this.container.querySelector('#pago-observaciones').value = "";
+        
+        // Initial check for defaults
+        this.checkDuplicatePayment();
         
         modal.style.display = 'block';
     }
@@ -672,8 +679,7 @@ export class SociosPage {
             fecha_pago: this.container.querySelector('#pago-fecha').value,
             mes_abono: `${mes} ${anio}`,
             fecha_vencimiento: this.container.querySelector('#pago-vencimiento').value,
-            observaciones: this.container.querySelector('#pago-observaciones').value,
-            es_costo: !!this.isViewingCosts
+            observaciones: this.container.querySelector('#pago-observaciones').value
         };
 
         try {

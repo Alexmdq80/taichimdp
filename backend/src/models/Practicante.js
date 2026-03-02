@@ -118,10 +118,19 @@ export class Practicante {
         const total = countRows[0]?.total || 0;
 
         // Get paginated results
-        const sql = `SELECT * FROM Practicante${whereClause} ORDER BY nombre_completo ASC LIMIT ${limitNum} OFFSET ${offset}`;
+        const sql = `
+            SELECT p.*, (SELECT COUNT(*) FROM Socio s WHERE s.practicante_id = p.id AND s.deleted_at IS NULL) as socio_count
+            FROM Practicante p${whereClause} 
+            ORDER BY p.nombre_completo ASC 
+            LIMIT ${limitNum} OFFSET ${offset}
+        `;
 
         const [rows] = await pool.execute(sql, searchParams);
-        const practicantes = rows.map(row => new Practicante(row));
+        const practicantes = rows.map(row => {
+            const p = new Practicante(row);
+            p.socio_count = row.socio_count || 0;
+            return p;
+        });
 
         return {
             data: practicantes,
@@ -296,6 +305,7 @@ export class Practicante {
             medicamentos: this.medicamentos,
             limitaciones_fisicas: this.limitaciones_fisicas,
             alergias: this.alergias,
+            socio_count: this.socio_count || 0,
             created_at: this.created_at,
             updated_at: this.updated_at,
             deleted_at: this.deleted_at

@@ -18,15 +18,18 @@ export class Socio {
         this.lugar_nombre = data.lugar_nombre || null;
         this.cuota_social_general = data.cuota_social_general || 0.00;
         this.cuota_social_descuento = data.cuota_social_descuento || 0.00;
+        this.es_profesor = data.es_profesor !== undefined ? !!data.es_profesor : false;
     }
 
     static async findAll(filters = {}) {
         let sql = `
-            SELECT s.*, p.nombre_completo, l.nombre as lugar_nombre,
-                   l.cuota_social_general, l.cuota_social_descuento
+            SELECT s.*, p.nombre_completo, p.es_profesor, l.nombre as lugar_nombre,
+                   COALESCE(lp.cuota_social_general, l.cuota_social_general) as cuota_social_general,
+                   COALESCE(lp.cuota_social_descuento, l.cuota_social_descuento) as cuota_social_descuento
             FROM Socio s
             JOIN Practicante p ON s.practicante_id = p.id
             JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar lp ON l.parent_id = lp.id
             WHERE s.deleted_at IS NULL
         `;
         const params = [];
@@ -53,29 +56,35 @@ export class Socio {
         return rows.map(row => new Socio(row));
     }
 
-    static async findById(id) {
+    static async findById(id, connection = null) {
         const sql = `
-            SELECT s.*, p.nombre_completo, l.nombre as lugar_nombre,
-                   l.cuota_social_general, l.cuota_social_descuento
+            SELECT s.*, p.nombre_completo, p.es_profesor, l.nombre as lugar_nombre,
+                   COALESCE(lp.cuota_social_general, l.cuota_social_general) as cuota_social_general,
+                   COALESCE(lp.cuota_social_descuento, l.cuota_social_descuento) as cuota_social_descuento
             FROM Socio s
             JOIN Practicante p ON s.practicante_id = p.id
             JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar lp ON l.parent_id = lp.id
             WHERE s.id = ? AND s.deleted_at IS NULL
         `;
-        const [rows] = await pool.execute(sql, [id]);
+        const executor = connection || pool;
+        const [rows] = await executor.execute(sql, [id]);
         return rows.length ? new Socio(rows[0]) : null;
     }
 
-    static async findByPracticanteAndLugar(practicanteId, lugarId) {
+    static async findByPracticanteAndLugar(practicanteId, lugarId, connection = null) {
         const sql = `
-            SELECT s.*, p.nombre_completo, l.nombre as lugar_nombre,
-                   l.cuota_social_general, l.cuota_social_descuento
+            SELECT s.*, p.nombre_completo, p.es_profesor, l.nombre as lugar_nombre,
+                   COALESCE(lp.cuota_social_general, l.cuota_social_general) as cuota_social_general,
+                   COALESCE(lp.cuota_social_descuento, l.cuota_social_descuento) as cuota_social_descuento
             FROM Socio s
             JOIN Practicante p ON s.practicante_id = p.id
             JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar lp ON l.parent_id = lp.id
             WHERE s.practicante_id = ? AND s.lugar_id = ? AND s.deleted_at IS NULL
         `;
-        const [rows] = await pool.execute(sql, [practicanteId, lugarId]);
+        const executor = connection || pool;
+        const [rows] = await executor.execute(sql, [practicanteId, lugarId]);
         return rows.length ? new Socio(rows[0]) : null;
     }
 
@@ -85,7 +94,7 @@ export class Socio {
      */
     static async findCandidates() {
         const sql = `
-            SELECT DISTINCT p.id as practicante_id, p.nombre_completo, 
+            SELECT DISTINCT p.id as practicante_id, p.nombre_completo, p.es_profesor, 
                    COALESCE(l.parent_id, l.id) as real_lugar_id,
                    COALESCE(lp.nombre, l.nombre) as real_lugar_nombre,
                    COALESCE(lp.cuota_social_general, l.cuota_social_general) as cuota_social_general,
@@ -188,7 +197,7 @@ export class Socio {
             const [pagos] = await pool.execute(`
                 SELECT fecha_vencimiento 
                 FROM PagoSocio 
-                WHERE socio_id = ? AND es_costo = 1 AND deleted_at IS NULL
+                WHERE socio_id = ? AND deleted_at IS NULL
                 ORDER BY fecha_vencimiento DESC LIMIT 1
             `, [socioId]);
 
@@ -213,61 +222,65 @@ export class Socio {
         return alerts;
     }
 
-    static async create(data, userId = null) {
+    static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Socio (practicante_id, lugar_id, numero_socio)
             VALUES (?, ?, ?)
         `;
-        const [result] = await pool.execute(sql, [
+        const executor = connection || pool;
+        const [result] = await executor.execute(sql, [
             data.practicante_id,
             data.lugar_id,
             data.numero_socio
         ]);
         
-        const newSocio = await this.findById(result.insertId);
+        const newSocio = await this.findById(result.insertId, executor);
         if (newSocio) {
-            await this.recordHistory(newSocio.id, 'CREATE', null, newSocio.toJSON(), userId);
+            await this.recordHistory(newSocio.id, 'CREATE', null, newSocio.toJSON(), userId, executor);
         }
         return newSocio;
     }
 
-    static async update(id, data, userId = null) {
-        const current = await this.findById(id);
+    static async update(id, data, connection = null, userId = null) {
+        const executor = connection || pool;
+        const current = await this.findById(id, executor);
         if (!current) return null;
 
         const sql = `
             UPDATE Socio SET numero_socio = ?
             WHERE id = ? AND deleted_at IS NULL
         `;
-        await pool.execute(sql, [data.numero_socio, id]);
+        await executor.execute(sql, [data.numero_socio, id]);
         
-        const updated = await this.findById(id);
+        const updated = await this.findById(id, executor);
         if (updated) {
-            await this.recordHistory(id, 'UPDATE', current.toJSON(), updated.toJSON(), userId);
+            await this.recordHistory(id, 'UPDATE', current.toJSON(), updated.toJSON(), userId, executor);
         }
         return updated;
     }
 
-    static async delete(id, userId = null) {
-        const current = await this.findById(id);
+    static async delete(id, connection = null, userId = null) {
+        const executor = connection || pool;
+        const current = await this.findById(id, executor);
         if (!current) return false;
 
         const sql = 'UPDATE Socio SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?';
-        const [result] = await pool.execute(sql, [id]);
+        const [result] = await executor.execute(sql, [id]);
         
         if (result.affectedRows > 0) {
-            await this.recordHistory(id, 'DELETE', current.toJSON(), null, userId);
+            await this.recordHistory(id, 'DELETE', current.toJSON(), null, userId, executor);
             return true;
         }
         return false;
     }
 
-    static async recordHistory(socioId, action, oldData, newData, userId) {
+    static async recordHistory(socioId, action, oldData, newData, userId, connection = null) {
         const sql = `
             INSERT INTO HistorialSocio (socio_id, accion, datos_anteriores, datos_nuevos, usuario_id)
             VALUES (?, ?, ?, ?, ?)
         `;
-        await pool.execute(sql, [
+        const executor = connection || pool;
+        await executor.execute(sql, [
             socioId,
             action,
             oldData ? JSON.stringify(oldData) : null,
@@ -302,6 +315,7 @@ export class Socio {
             lugar_nombre: this.lugar_nombre,
             cuota_social_general: this.cuota_social_general,
             cuota_social_descuento: this.cuota_social_descuento,
+            es_profesor: this.es_profesor,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

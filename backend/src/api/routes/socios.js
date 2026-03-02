@@ -69,7 +69,7 @@ router.post('/', asyncHandler(async (req, res) => {
         throw new AppError('El practicante ya está registrado como socio en este lugar', 400);
     }
 
-    const socio = await Socio.create({ practicante_id, lugar_id, numero_socio }, userId);
+    const socio = await Socio.create({ practicante_id, lugar_id, numero_socio }, null, userId);
     res.status(201).json({ data: socio.toJSON() });
 }));
 
@@ -81,7 +81,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     const { numero_socio } = req.body;
     const userId = req.user.userId;
 
-    const socio = await Socio.update(id, { numero_socio }, userId);
+    const socio = await Socio.update(id, { numero_socio }, null, userId);
     if (!socio) throw new AppError('Socio no encontrado', 404);
     res.json({ data: socio.toJSON() });
 }));
@@ -93,7 +93,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const userId = req.user.userId;
 
-    const deleted = await Socio.delete(id, userId);
+    const deleted = await Socio.delete(id, null, userId);
     if (!deleted) throw new AppError('Socio no encontrado', 404);
     res.json({ message: 'Socio eliminado correctamente' });
 }));

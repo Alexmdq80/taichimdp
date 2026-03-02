@@ -95,6 +95,10 @@ export class PracticantesPage {
                 this.selectedPracticante = practicante;
                 this.showDetail(practicante, true); // Pass true to open payment modal
             },
+            onReceiveCuota: (practicante) => {
+                this.selectedPracticante = practicante;
+                this.showDetail(practicante, false, true); // Pass true to open cuota modal
+            },
             onShowHistory: (practicante) => {
                 this.showHistory(practicante);
             }
@@ -127,7 +131,7 @@ export class PracticantesPage {
         form.render();
     }
 
-    showDetail(practicante, openPaymentModal = false) { // Added openPaymentModal parameter
+    showDetail(practicante, openPaymentModal = false, openCuotaModal = false) { 
         this.currentView = 'detail';
         const content = this.container.querySelector('#practicantes-content');
 
@@ -139,7 +143,8 @@ export class PracticantesPage {
             onClose: () => {
                 this.showList();
             },
-            openPaymentModal: openPaymentModal // Pass the parameter to PracticanteDetail
+            openPaymentModal: openPaymentModal,
+            openCuotaModal: openCuotaModal 
         });
 
         detail.render(practicante);

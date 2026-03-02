@@ -41,6 +41,7 @@ import asistenciaRoutes from './routes/asistencia.js'; // Import asistencia rout
 import sociosRoutes from './routes/socios.js'; // Import socios routes
 import pagosSociosRoutes from './routes/pagosSocios.js'; // Import pagosSocios routes
 import usersRoutes from './routes/users.js'; // Import users routes
+import deudasRoutes from './routes/deudas.js'; // Import deudas routes
 
 app.use('/api', apiRoutes);
 app.use('/api/practicantes', practicantesRoutes);
@@ -54,6 +55,7 @@ app.use('/api/asistencia', asistenciaRoutes); // Mount asistencia routes (includ
 app.use('/api/socios', sociosRoutes); // Mount socios routes
 app.use('/api/pagos-socios', pagosSociosRoutes); // Mount pagosSocios routes
 app.use('/api/users', usersRoutes); // Mount users routes
+app.use('/api/deudas', deudasRoutes); // Mount deudas routes
 
 // 404 handler
 app.use((req, res) => {

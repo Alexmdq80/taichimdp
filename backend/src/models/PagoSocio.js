@@ -13,15 +13,32 @@ export class PagoSocio {
         this.fecha_vencimiento = data.fecha_vencimiento;
         this.observaciones = data.observaciones || null;
         this.usuario_id = data.usuario_id || null;
-        this.es_costo = data.es_costo !== undefined ? !!data.es_costo : false;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
+
+        // Dynamic fields from JOINs
+        this.es_profesor = data.es_profesor !== undefined ? !!data.es_profesor : false;
+        this.nombre_completo = data.nombre_completo || null;
+        this.lugar_nombre = data.lugar_nombre || null;
+    }
+
+    static async existsForSocioAndMonth(socioId, mesAbono, excludeId = null) {
+        let sql = 'SELECT id FROM PagoSocio WHERE socio_id = ? AND mes_abono = ? AND deleted_at IS NULL';
+        const params = [socioId, mesAbono];
+        
+        if (excludeId) {
+            sql += ' AND id != ?';
+            params.push(excludeId);
+        }
+        
+        const [rows] = await pool.execute(sql, params);
+        return rows.length > 0;
     }
 
     static async findAll(filters = {}) {
         let sql = `
-            SELECT ps.*, p.nombre_completo, l.nombre as lugar_nombre
+            SELECT ps.*, p.nombre_completo, l.nombre as lugar_nombre, p.es_profesor
             FROM PagoSocio ps
             JOIN Socio s ON ps.socio_id = s.id
             JOIN Practicante p ON s.practicante_id = p.id
@@ -35,70 +52,98 @@ export class PagoSocio {
             params.push(filters.socio_id);
         }
 
-        if (filters.es_costo !== undefined) {
-            sql += ' AND ps.es_costo = ?';
-            params.push(filters.es_costo ? 1 : 0);
-        }
-
         sql += ' ORDER BY ps.fecha_pago DESC';
 
         const [rows] = await pool.execute(sql, params);
         return rows.map(row => new PagoSocio(row));
     }
 
-    static async findById(id) {
+    static async findById(id, connection = null) {
         const sql = `
-            SELECT ps.*
+            SELECT ps.*, p.es_profesor
             FROM PagoSocio ps
+            JOIN Socio s ON ps.socio_id = s.id
+            JOIN Practicante p ON s.practicante_id = p.id
             WHERE ps.id = ? AND ps.deleted_at IS NULL
         `;
-        const [rows] = await pool.execute(sql, [id]);
+        const executor = connection || pool;
+        const [rows] = await executor.execute(sql, [id]);
         return rows.length ? new PagoSocio(rows[0]) : null;
     }
 
-    static async create(data, userId = null) {
+    static async create(data, connection = null, userId = null) {
         const sql = `
-            INSERT INTO PagoSocio (socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones, usuario_id, es_costo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO PagoSocio (socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
-        const [result] = await pool.execute(sql, [
+        const executor = connection || pool;
+        const [result] = await executor.execute(sql, [
             data.socio_id,
             data.monto || 0.00,
             data.fecha_pago,
             data.mes_abono,
             data.fecha_vencimiento,
             data.observaciones || null,
-            userId,
-            data.es_costo !== undefined ? data.es_costo : false
+            userId
         ]);
         
-        const newPago = await this.findById(result.insertId);
+        const newPago = await this.findById(result.insertId, executor);
         if (newPago) {
-            await this.recordHistory(newPago.id, 'CREATE', null, newPago.toJSON(), userId);
+            await this.recordHistory(newPago.id, 'CREATE', null, newPago.toJSON(), userId, executor);
         }
         return newPago;
     }
 
-    static async delete(id, userId = null) {
-        const current = await this.findById(id);
+    static async update(id, data, connection = null, userId = null) {
+        const executor = connection || pool;
+        const current = await this.findById(id, executor);
+        if (!current) return null;
+
+        const sql = `
+            UPDATE PagoSocio 
+            SET monto = ?, fecha_pago = ?, mes_abono = ?, fecha_vencimiento = ?, observaciones = ?
+            WHERE id = ? AND deleted_at IS NULL
+        `;
+        
+        const [result] = await executor.execute(sql, [
+            data.monto !== undefined ? data.monto : current.monto,
+            data.fecha_pago !== undefined ? data.fecha_pago : current.fecha_pago,
+            data.mes_abono !== undefined ? data.mes_abono : current.mes_abono,
+            data.fecha_vencimiento !== undefined ? data.fecha_vencimiento : current.fecha_vencimiento,
+            data.observaciones !== undefined ? data.observaciones : current.observaciones,
+            id
+        ]);
+
+        if (result.affectedRows > 0) {
+            const updated = await this.findById(id, executor);
+            await this.recordHistory(id, 'UPDATE', current.toJSON(), updated.toJSON(), userId, executor);
+            return updated;
+        }
+        return null;
+    }
+
+    static async delete(id, connection = null, userId = null) {
+        const executor = connection || pool;
+        const current = await this.findById(id, executor);
         if (!current) return false;
 
         const sql = 'UPDATE PagoSocio SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?';
-        const [result] = await pool.execute(sql, [id]);
+        const [result] = await executor.execute(sql, [id]);
         
         if (result.affectedRows > 0) {
-            await this.recordHistory(id, 'DELETE', current.toJSON(), null, userId);
+            await this.recordHistory(id, 'DELETE', current.toJSON(), null, userId, executor);
             return true;
         }
         return false;
     }
 
-    static async recordHistory(pagoSocioId, action, oldData, newData, userId) {
+    static async recordHistory(pagoSocioId, action, oldData, newData, userId, connection = null) {
         const sql = `
             INSERT INTO HistorialPagoSocio (pago_socio_id, accion, datos_anteriores, datos_nuevos, usuario_id)
             VALUES (?, ?, ?, ?, ?)
         `;
-        await pool.execute(sql, [
+        const executor = connection || pool;
+        await executor.execute(sql, [
             pagoSocioId,
             action,
             oldData ? JSON.stringify(oldData) : null,
@@ -124,7 +169,7 @@ export class PagoSocio {
             fecha_vencimiento: formatDate(this.fecha_vencimiento),
             observaciones: this.observaciones,
             usuario_id: this.usuario_id,
-            es_costo: this.es_costo,
+            es_profesor: this.es_profesor,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

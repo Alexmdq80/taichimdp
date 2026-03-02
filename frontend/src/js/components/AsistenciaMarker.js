@@ -138,9 +138,47 @@ export class AsistenciaMarker {
                     </div>
                 </div>
             </div>
+
+            <!-- Custom Confirmation Modal -->
+            <div id="confirm-modal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h2>Confirmación de Cobro</h2>
+                    </div>
+                    <div class="modal-body">
+                        <p id="confirm-modal-message"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="confirm-yes-btn" class="btn btn-success">Sí, cobrar</button>
+                        <button id="confirm-no-btn" class="btn btn-secondary">No cobrar</button>
+                    </div>
+                </div>
+            </div>
         `;
 
         this.attachEvents();
+    }
+
+    showCustomConfirm(message) {
+        return new Promise((resolve) => {
+            const modal = this.container.querySelector('#confirm-modal');
+            const msgP = this.container.querySelector('#confirm-modal-message');
+            const yesBtn = this.container.querySelector('#confirm-yes-btn');
+            const noBtn = this.container.querySelector('#confirm-no-btn');
+
+            msgP.textContent = message;
+            modal.style.display = 'block';
+
+            const handleResponse = (result) => {
+                modal.style.display = 'none';
+                yesBtn.onclick = null;
+                noBtn.onclick = null;
+                resolve(result);
+            };
+
+            yesBtn.onclick = () => handleResponse(true);
+            noBtn.onclick = () => handleResponse(false);
+        });
     }
 
     renderPracticantesRows(canModify, isClosed) {
@@ -253,6 +291,26 @@ export class AsistenciaMarker {
             const observaciones = this.container.querySelector('#clase-observaciones').value;
             const motivo_cancelacion = this.container.querySelector('#motivo-cancelacion') ? this.container.querySelector('#motivo-cancelacion').value : '';
 
+            let cobrar_salon = false;
+            
+            // Logic for charging salon cost on cancellation/suspension
+            // Only if at least one student is checked (asistio)
+            const markedAttendeesCount = updates.filter(u => u.asistio).length;
+
+            if (c.tipo === 'flexible' && (estado === 'cancelada' || estado === 'suspendida') && markedAttendeesCount > 0) {
+                try {
+                    const lugarRes = await apiClient.get(`/lugares/${c.lugar_id}`);
+                    const lugar = lugarRes.data;
+                    
+                    if (lugar && lugar.costo_tarifa > 0) {
+                        const confirmMsg = `La clase se marcará como ${estado}. Hay ${markedAttendeesCount} alumno(s) tildados. El salón tiene un costo de $${parseFloat(lugar.costo_tarifa).toFixed(2)}. ¿Desea cobrar este costo a los alumnos como deuda?`;
+                        cobrar_salon = await this.showCustomConfirm(confirmMsg);
+                    }
+                } catch (e) {
+                    console.error('Error checking salon cost', e);
+                }
+            }
+
             try {
                 // 1. Save class data
                 await apiClient.put(`/asistencia/clases/${this.options.clase.id}`, {
@@ -266,11 +324,11 @@ export class AsistenciaMarker {
                     hora_fin: this.options.clase.hora_fin
                 });
 
-                // 2. Save attendance
-                const canModify = c.tipo === 'grupal' ? (estado === 'realizada') : (estado === 'programada' || estado === 'realizada');
-                if (canModify && updates.length > 0) {
-                    await apiClient.post(`/asistencia/clases/${this.options.clase.id}/practicantes`, { updates });
-                }
+                // 2. Save attendance and handle debts
+                await apiClient.post(`/asistencia/clases/${this.options.clase.id}/practicantes`, { 
+                    updates,
+                    cobrar_salon
+                });
                 
                 showSuccess('Datos de la clase guardados correctamente');
                 this.options.onClose();

@@ -8,6 +8,7 @@ export class Pago {
         this.id = data.id || null;
         this.practicante_id = data.practicante_id;
         this.abono_id = data.abono_id;
+        this.pago_socio_id = data.pago_socio_id || null;
         this.mes_abono = data.mes_abono || null;
         this.lugar_id = data.lugar_id || null;
         this.fecha = data.fecha || new Date().toISOString().split('T')[0];
@@ -35,13 +36,14 @@ export class Pago {
     static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Pago (
-                practicante_id, abono_id, mes_abono, lugar_id, fecha, monto, metodo_pago, notas
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                practicante_id, abono_id, pago_socio_id, mes_abono, lugar_id, fecha, monto, metodo_pago, notas
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
             data.practicante_id,
             data.abono_id,
+            data.pago_socio_id || null,
             data.mes_abono || null,
             data.lugar_id || null,
             data.fecha,
@@ -68,12 +70,12 @@ export class Pago {
      */
     static async findAll(filters = {}) {
         let sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
+            SELECT p.*, COALESCE(ta.nombre, 'Recepción Cuota Social') as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
                    a.fecha_vencimiento, l.nombre as lugar_nombre,
                    (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
-            JOIN Abono a ON p.abono_id = a.id
-            JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            LEFT JOIN Abono a ON p.abono_id = a.id
+            LEFT JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
             LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.deleted_at IS NULL
@@ -108,12 +110,12 @@ export class Pago {
      */
     static async findById(id, connection = null) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
+            SELECT p.*, COALESCE(ta.nombre, 'Recepción Cuota Social') as tipo_abono_nombre, ta.categoria, pr.nombre_completo as practicante_nombre,
                    a.fecha_vencimiento, l.nombre as lugar_nombre,
                    (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
-            JOIN Abono a ON p.abono_id = a.id
-            JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            LEFT JOIN Abono a ON p.abono_id = a.id
+            LEFT JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             JOIN Practicante pr ON p.practicante_id = pr.id
             LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.id = ? AND p.deleted_at IS NULL
@@ -137,11 +139,11 @@ export class Pago {
      */
     static async findByPracticanteId(practicanteId) {
         const sql = `
-            SELECT p.*, ta.nombre as tipo_abono_nombre, ta.categoria, a.fecha_vencimiento, l.nombre as lugar_nombre,
+            SELECT p.*, COALESCE(ta.nombre, 'Recepción Cuota Social') as tipo_abono_nombre, ta.categoria, a.fecha_vencimiento, l.nombre as lugar_nombre,
                    (SELECT JSON_ARRAYAGG(horario_id) FROM TipoAbono_Horario WHERE tipo_abono_id = ta.id) as schedules
             FROM Pago p
-            JOIN Abono a ON p.abono_id = a.id
-            JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
+            LEFT JOIN Abono a ON p.abono_id = a.id
+            LEFT JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
             LEFT JOIN Lugar l ON p.lugar_id = l.id
             WHERE p.practicante_id = ? AND p.deleted_at IS NULL
             ORDER BY p.fecha DESC
@@ -152,6 +154,44 @@ export class Pago {
             rowData.horarios_ids = typeof row.schedules === 'string' ? JSON.parse(row.schedules) : (row.schedules || []);
             return new Pago(rowData);
         });
+    }
+
+    /**
+     * Update payment and record history
+     * @param {number} id - Pago ID
+     * @param {Object} data - Updated data
+     * @param {Object} [connection] - Database connection
+     * @param {number} [userId] - User ID
+     * @returns {Promise<Pago|null>}
+     */
+    static async update(id, data, connection = null, userId = null) {
+        const executor = connection || pool;
+        const currentData = await this.findById(id, executor);
+        if (!currentData) return null;
+
+        const allowedFields = ['fecha', 'monto', 'metodo_pago', 'notas'];
+        const updates = [];
+        const values = [];
+
+        for (const field of allowedFields) {
+            if (data.hasOwnProperty(field)) {
+                updates.push(`${field} = ?`);
+                values.push(data[field]);
+            }
+        }
+
+        if (updates.length === 0) return currentData;
+
+        values.push(id);
+        const sql = `UPDATE Pago SET ${updates.join(', ')} WHERE id = ? AND deleted_at IS NULL`;
+        await executor.execute(sql, values);
+
+        const updatedPago = await this.findById(id, executor);
+        if (updatedPago) {
+            await this.recordHistory(id, 'UPDATE', currentData.toJSON(), updatedPago.toJSON(), userId, executor);
+        }
+
+        return updatedPago;
     }
 
     /**

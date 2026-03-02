@@ -17,9 +17,48 @@ router.get('/', asyncHandler(async (req, res) => {
     const pagos = await PagoService.getAllPayments({ search, categoria });
     res.status(200).json({ data: pagos });
 }));
+/**
+ * PUT /api/pagos/:id
+ * Update a payment's details
+ */
+router.put('/:id', asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const userId = req.user.userId;
+    if (isNaN(id)) {
+        throw new AppError('Invalid ID: ID must be a valid integer', 400);
+    }
+
+    const updated = await PagoService.updatePayment(id, req.body, userId);
+    if (!updated) {
+        throw new AppError('Payment not found', 404);
+    }
+
+    res.status(200).json({ message: 'Payment updated successfully', data: updated });
+}));
+
+/**
+ * POST /api/pagos/social-fee
+ * Register a payment that is only for a social fee
+ */
+router.post('/social-fee', asyncHandler(async (req, res) => {
+    const { practicante_id, lugar_id, monto, fecha_pago, mes_abono, metodo_pago, observaciones } = req.body;
+    const userId = req.user.userId;
+
+    if (!practicante_id || !lugar_id || !monto || !fecha_pago) {
+        throw new AppError('Faltan campos obligatorios', 400);
+    }
+
+    const pago = await PagoService.createSocialFeeOnlyPayment(
+        practicante_id, lugar_id, monto, fecha_pago, mes_abono, metodo_pago, observaciones, userId
+    );
+
+    res.status(201).json({ data: pago });
+}));
 
 /**
  * DELETE /api/pagos/:id
+...
+
  * Delete (soft-delete) a payment
  */
 router.delete('/:id', asyncHandler(async (req, res) => {
