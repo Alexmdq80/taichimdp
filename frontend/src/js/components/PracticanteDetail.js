@@ -13,6 +13,8 @@ export class PracticanteDetail {
     this.options = {
       onEdit: options.onEdit || (() => {}),
       onClose: options.onClose || (() => {}),
+      onPrev: options.onPrev || null,
+      onNext: options.onNext || null,
       openPaymentModal: options.openPaymentModal || false, 
       openCuotaModal: options.openCuotaModal || false 
     };
@@ -49,15 +51,47 @@ export class PracticanteDetail {
 
     this.container.innerHTML = `
       <div class="card">
-        <div class="card-header flex justify-between items-center">
-          <h2 class="card-title">Detalles del Practicante</h2>
-          <div class="flex gap-2">
-            <button id="edit-btn" class="btn">Editar</button>
-            <button id="receive-cuota-btn" class="btn btn-success" style="display: none;">Recibir Cuota Social</button>
-            <button id="pay-abono-btn" class="btn btn-primary">Pagar Abono</button>
-            <button id="close-btn" class="btn btn-secondary">Cerrar</button>
+        <!-- Bloque 1: Control de Navegación Superior -->
+        <div style="display: flex; justify-content: center; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--border-color); background-color: #fcfcfc; border-radius: 0.5rem 0.5rem 0 0; margin: -1.25rem -1.25rem 1.5rem -1.25rem;">
+          <div style="display: flex; align-items: center; gap: 3rem;">
+            <div style="width: 80px; display: flex; justify-content: center;">
+              ${this.options.onPrev ? `
+                <button id="prev-btn" class="btn btn-outline-secondary" title="Anterior" style="font-size: 2.5rem; width: 80px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; border-width: 2px;">
+                  &lArr;
+                </button>
+              ` : ''}
+            </div>
+            
+            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px;">Navegación</span>
+
+            <div style="width: 80px; display: flex; justify-content: center;">
+              ${this.options.onNext ? `
+                <button id="next-btn" class="btn btn-outline-secondary" title="Siguiente" style="font-size: 2.5rem; width: 80px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; border-width: 2px;">
+                  &rArr;
+                </button>
+              ` : ''}
+            </div>
           </div>
-...
+        </div>
+
+        <div class="card-header">
+          <!-- Bloque 2: Nombre e Identidad -->
+          <div class="text-center" style="margin-bottom: 2rem;">
+            <h2 class="card-title" style="font-size: 2.75rem; color: var(--primary-color); margin-bottom: 0.25rem;">${this.escapeHtml(practicante.nombre_completo)}</h2>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
+              <span class="badge badge-info">Ficha del Practicante</span>
+              ${practicante.es_profesor ? '<span class="badge badge-warning">Profesor</span>' : ''}
+            </div>
+          </div>
+
+          <!-- Bloque 3: Botones de Acción -->
+          <div class="flex justify-center gap-2 flex-wrap" style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+            <button id="edit-btn" class="btn" style="padding: 0.5rem 1.5rem;">Editar Perfil</button>
+            <button id="receive-cuota-btn" class="btn btn-success" style="display: none; padding: 0.5rem 1.5rem;">Recibir Cuota Social</button>
+            <button id="pay-abono-btn" class="btn btn-primary" style="padding: 0.5rem 1.5rem;">Pagar Abono</button>
+            <button id="close-btn" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Cerrar</button>
+          </div>
+        </div>
       <!-- Receive Cuota Social Modal -->
       <div id="cuota-modal" class="modal">
         <div class="modal-content">
@@ -175,6 +209,41 @@ export class PracticanteDetail {
               
               <dt>Alergias:</dt>
               <dd>${practicante.alergias || 'Ninguna registrada'}</dd>
+            </dl>
+
+            <h3>Contacto de Emergencia</h3>
+            <dl>
+              <dt>Nombre de Contacto:</dt>
+              <dd>${practicante.emergencia_nombre || 'No especificado'}</dd>
+              
+              <dt>Teléfono de Contacto:</dt>
+              <dd>${practicante.emergencia_telefono || 'No especificado'}</dd>
+              
+              <dt>Obra Social:</dt>
+              <dd>${practicante.obra_social || 'No especificada'}${practicante.obra_social_nro ? ` (Afiliado: ${practicante.obra_social_nro})` : ''}</dd>
+              
+              <dt>Servicio de Emergencia:</dt>
+              <dd>${practicante.emergencia_servicio || 'No especificado'}${practicante.emergencia_servicio_telefono ? ` (Tel: ${practicante.emergencia_servicio_telefono})` : ''}</dd>
+            </dl>
+
+            <h3>Información Adicional</h3>
+            <dl>
+              <dt>Ocupación:</dt>
+              <dd>${practicante.ocupacion || 'No especificada'}</dd>
+
+              <dt>Estudios:</dt>
+              <dd>${practicante.estudios || 'No especificados'}</dd>
+
+              <dt>Actividad Física Actual:</dt>
+              <dd>${practicante.actividad_fisica_actual ? `Sí - ${practicante.actividad_fisica_detalle || 'Sin detalles'}` : `No${practicante.actividad_fisica_anios_inactivo ? ` (Hace ${practicante.actividad_fisica_anios_inactivo} años)` : ''}`}</dd>
+              
+              ${!practicante.actividad_fisica_actual && practicante.actividad_fisica_anterior ? `
+                <dt>Actividades anteriores:</dt>
+                <dd>${practicante.actividad_fisica_anterior}</dd>
+              ` : ''}
+
+              <dt>Observaciones:</dt>
+              <dd>${practicante.observaciones_adicionales || 'Ninguna registrada'}</dd>
             </dl>
 
             <h3>Información del Sistema</h3>
@@ -381,16 +450,29 @@ export class PracticanteDetail {
         this.options.openCuotaModal = false; // Clear for future renders
     }
   }
-
   attachEvents() {
     const editBtn = this.container.querySelector('#edit-btn');
     const closeBtn = this.container.querySelector('#close-btn');
     const payAbonoBtn = this.container.querySelector('#pay-abono-btn');
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
     const paymentModal = this.container.querySelector('#payment-modal');
     const closePaymentModalBtn = paymentModal.querySelector('.close-button');
     const paymentForm = this.container.querySelector('#payment-form');
     const tipoAbonoSelect = this.container.querySelector('#tipo-abono-select');
     const fechaPagoInput = this.container.querySelector('#fecha-pago-input');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        this.options.onPrev();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        this.options.onNext();
+      });
+    }
 
     if (editBtn) {
       editBtn.addEventListener('click', () => {

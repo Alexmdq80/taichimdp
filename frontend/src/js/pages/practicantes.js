@@ -19,6 +19,7 @@ export class PracticantesPage {
         };
         this.currentView = 'list'; // 'list', 'form', 'detail', 'history'
         this.selectedPracticante = null;
+        this.currentPracticantesList = [];
     }
 
     async render() {
@@ -78,6 +79,9 @@ export class PracticantesPage {
         const detailContainer = content.querySelector('#detail-container');
 
         const list = new PracticanteList(listContainer, {
+            onLoad: (list) => {
+                this.currentPracticantesList = list;
+            },
             onSelect: (practicante) => {
                 this.selectedPracticante = practicante;
                 this.showDetail(practicante);
@@ -138,11 +142,23 @@ export class PracticantesPage {
         content.innerHTML = '<div id="detail-container"></div>';
         const detailContainer = content.querySelector('#detail-container');
 
+        const currentIndex = this.currentPracticantesList.findIndex(p => p.id === practicante.id);
+        const hasPrev = currentIndex > 0;
+        const hasNext = currentIndex < this.currentPracticantesList.length - 1 && currentIndex !== -1;
+
         const detail = new PracticanteDetail(detailContainer, {
             onEdit: (p) => this.showForm(p),
             onClose: () => {
                 this.showList();
             },
+            onPrev: hasPrev ? () => {
+                const prevPracticante = this.currentPracticantesList[currentIndex - 1];
+                this.showDetail(prevPracticante);
+            } : null,
+            onNext: hasNext ? () => {
+                const nextPracticante = this.currentPracticantesList[currentIndex + 1];
+                this.showDetail(nextPracticante);
+            } : null,
             openPaymentModal: openPaymentModal,
             openCuotaModal: openCuotaModal 
         });

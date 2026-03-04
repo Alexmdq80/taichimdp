@@ -18,6 +18,7 @@ export class PracticanteList {
       onShowHistory: options.onShowHistory || (() => {}),
       onReceiveCuota: options.onReceiveCuota || (() => {}),
       onPayAbono: options.onPayAbono || (() => {}),
+      onLoad: options.onLoad || (() => {}),
     };
     this.practicantes = [];
     this.currentPage = 1;
@@ -108,6 +109,7 @@ export class PracticanteList {
 
       this.renderList();
       this.renderPagination();
+      this.options.onLoad(this.practicantes);
     } catch (error) {
       displayApiError(error, listContainer);
     }
@@ -126,19 +128,31 @@ export class PracticanteList {
         <thead>
           <tr>
             <th>Nombre</th>
+            <th>Último Abono</th>
+            <th>Mes Abono</th>
+            <th title="Última Cuota Social Recibida (Pago del alumno)">C.S. Recibida</th>
+            <th title="Última Cuota Social Pagada (Rendido al club)">C.S. Pagada</th>
+            <th>Clases Rest.</th>
             <th>Teléfono</th>
-            <th>Email</th>
-            <th>Fecha de Nacimiento</th>
             <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
           ${this.practicantes.map(practicante => `
             <tr>
-              <td>${this.escapeHtml(practicante.nombre_completo)}</td>
+              <td><strong>${this.escapeHtml(practicante.nombre_completo)}</strong></td>
+              <td style="font-size: 0.85rem;">${practicante.ultimo_abono_nombre ? this.escapeHtml(practicante.ultimo_abono_nombre) : '<span class="text-muted">-</span>'}</td>
+              <td>${practicante.ultimo_abono_mes ? this.escapeHtml(practicante.ultimo_abono_mes) : '<span class="text-muted">-</span>'}</td>
+              <td style="background-color: #f0fdf4;">${practicante.ultima_cuota_social_recibida_mes ? this.escapeHtml(practicante.ultima_cuota_social_recibida_mes) : '<span class="text-muted">-</span>'}</td>
+              <td style="background-color: #fef2f2;">${practicante.ultima_cuota_social_pagada_mes ? this.escapeHtml(practicante.ultima_cuota_social_pagada_mes) : '<span class="text-muted">-</span>'}</td>
+              <td class="text-center">
+                ${practicante.clases_restantes !== null ? `
+                  <span class="badge ${practicante.clases_restantes <= 1 ? 'badge-danger' : 'badge-info'}">
+                    ${practicante.clases_restantes}
+                  </span>
+                ` : '<span class="text-muted">-</span>'}
+              </td>
               <td>${practicante.telefono ? this.escapeHtml(practicante.telefono) : '-'}</td>
-              <td>${practicante.email ? this.escapeHtml(practicante.email) : '-'}</td>
-              <td>${practicante.fecha_nacimiento ? formatDateReadable(practicante.fecha_nacimiento) : '-'}</td>
               <td>
                 <button 
                   class="btn btn-primary" 

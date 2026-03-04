@@ -125,6 +125,23 @@ button:hover,
   box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
 }
 
+/* Date input styling */
+input[type="date"].form-control {
+  min-height: 2.5rem;
+}
+
+input[type="date"].form-control::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 5px;
+  filter: invert(0.5);
+  font-size: 1.25rem;
+}
+
+input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
+  background-color: #f1f5f9;
+  border-radius: 4px;
+}
+
 .form-control-plaintext {
   display: block;
   width: 100%;

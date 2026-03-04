@@ -18,6 +18,22 @@ export class Practicante {
         this.medicamentos = data.medicamentos || null;
         this.limitaciones_fisicas = data.limitaciones_fisicas || null;
         this.alergias = data.alergias || null;
+        
+        // Extended information
+        this.emergencia_nombre = data.emergencia_nombre || null;
+        this.emergencia_telefono = data.emergencia_telefono || null;
+        this.obra_social = data.obra_social || null;
+        this.obra_social_nro = data.obra_social_nro || null;
+        this.emergencia_servicio = data.emergencia_servicio || null;
+        this.emergencia_servicio_telefono = data.emergencia_servicio_telefono || null;
+        this.ocupacion = data.ocupacion || null;
+        this.estudios = data.estudios || null;
+        this.actividad_fisica_actual = data.actividad_fisica_actual !== undefined ? !!data.actividad_fisica_actual : false;
+        this.actividad_fisica_detalle = data.actividad_fisica_detalle || null;
+        this.actividad_fisica_anios_inactivo = data.actividad_fisica_anios_inactivo || null;
+        this.actividad_fisica_anterior = data.actividad_fisica_anterior || null;
+        this.observaciones_adicionales = data.observaciones_adicionales || null;
+
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
         this.deleted_at = data.deleted_at || null;
@@ -33,8 +49,12 @@ export class Practicante {
         const sql = `
       INSERT INTO Practicante (
         user_id, es_profesor, nombre_completo, fecha_nacimiento, genero, telefono, email,
-        direccion, condiciones_medicas, medicamentos, limitaciones_fisicas, alergias
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        direccion, condiciones_medicas, medicamentos, limitaciones_fisicas, alergias,
+        emergencia_nombre, emergencia_telefono, obra_social, obra_social_nro,
+        emergencia_servicio, emergencia_servicio_telefono, ocupacion, estudios,
+        actividad_fisica_actual, actividad_fisica_detalle, actividad_fisica_anios_inactivo,
+        actividad_fisica_anterior, observaciones_adicionales
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
         const values = [
@@ -49,7 +69,20 @@ export class Practicante {
             data.condiciones_medicas || null,
             data.medicamentos || null,
             data.limitaciones_fisicas || null,
-            data.alergias || null
+            data.alergias || null,
+            data.emergencia_nombre || null,
+            data.emergencia_telefono || null,
+            data.obra_social || null,
+            data.obra_social_nro || null,
+            data.emergencia_servicio || null,
+            data.emergencia_servicio_telefono || null,
+            data.ocupacion || null,
+            data.estudios || null,
+            data.actividad_fisica_actual !== undefined ? data.actividad_fisica_actual : false,
+            data.actividad_fisica_detalle || null,
+            data.actividad_fisica_anios_inactivo || null,
+            data.actividad_fisica_anterior || null,
+            data.observaciones_adicionales || null
         ];
 
         const [result] = await pool.execute(sql, values);
@@ -119,7 +152,58 @@ export class Practicante {
 
         // Get paginated results
         const sql = `
-            SELECT p.*, (SELECT COUNT(*) FROM Socio s WHERE s.practicante_id = p.id AND s.deleted_at IS NULL) as socio_count
+            SELECT 
+                p.*, 
+                (SELECT COUNT(*) FROM Socio s WHERE s.practicante_id = p.id AND s.deleted_at IS NULL) as socio_count,
+                
+                -- Último tipo de abono pagado (que no sea cuota social)
+                (SELECT ta.nombre 
+                 FROM Pago pg 
+                 JOIN Abono ab ON pg.abono_id = ab.id 
+                 JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id 
+                 WHERE pg.practicante_id = p.id AND pg.deleted_at IS NULL 
+                 ORDER BY pg.fecha DESC, pg.id DESC LIMIT 1) as ultimo_abono_nombre,
+                
+                -- Mes del último abono pagado
+                (SELECT pg.mes_abono 
+                 FROM Pago pg 
+                 JOIN Abono ab ON pg.abono_id = ab.id 
+                 WHERE pg.practicante_id = p.id AND pg.deleted_at IS NULL 
+                 ORDER BY pg.fecha DESC, pg.id DESC LIMIT 1) as ultimo_abono_mes,
+                
+                -- Última cuota social recibida del practicante (buscando en Pago)
+                (SELECT pg.mes_abono 
+                 FROM Pago pg 
+                 WHERE pg.practicante_id = p.id AND pg.abono_id IS NULL AND pg.deleted_at IS NULL 
+                 ORDER BY pg.fecha DESC, pg.id DESC LIMIT 1) as ultima_cuota_social_recibida_mes,
+
+                -- Última cuota social pagada a la institución (buscando en PagoSocio)
+                (SELECT ps.mes_abono 
+                 FROM PagoSocio ps 
+                 JOIN Socio s ON ps.socio_id = s.id 
+                 WHERE s.practicante_id = p.id AND ps.fecha_pago IS NOT NULL AND ps.deleted_at IS NULL 
+                 ORDER BY ps.fecha_pago DESC, ps.id DESC LIMIT 1) as ultima_cuota_social_pagada_mes,
+                 
+                -- Clases restantes (Balance histórico: compradas - asistidas)
+                (SELECT 
+                    (SELECT IFNULL(SUM(ab.cantidad), 0) 
+                     FROM Abono ab 
+                     JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id 
+                     WHERE ab.practicante_id = p.id 
+                       AND ta.categoria IN ('particular', 'compartida') 
+                       AND ab.deleted_at IS NULL)
+                    -
+                    (SELECT COUNT(*) 
+                     FROM Asistencia asis 
+                     JOIN Clase cl ON asis.clase_id = cl.id 
+                     WHERE asis.practicante_id = p.id 
+                       AND asis.asistio = 1 
+                       AND cl.deleted_at IS NULL
+                       AND cl.tipo = 'flexible'
+                       AND cl.fecha <= CURDATE())
+                 WHERE EXISTS (SELECT 1 FROM Abono ab3 JOIN TipoAbono ta3 ON ab3.tipo_abono_id = ta3.id WHERE ab3.practicante_id = p.id AND ta3.categoria IN ('particular', 'compartida') AND ab3.deleted_at IS NULL)
+                ) as clases_restantes
+
             FROM Practicante p${whereClause} 
             ORDER BY p.nombre_completo ASC 
             LIMIT ${limitNum} OFFSET ${offset}
@@ -129,6 +213,11 @@ export class Practicante {
         const practicantes = rows.map(row => {
             const p = new Practicante(row);
             p.socio_count = row.socio_count || 0;
+            p.ultimo_abono_nombre = row.ultimo_abono_nombre || null;
+            p.ultimo_abono_mes = row.ultimo_abono_mes || null;
+            p.ultima_cuota_social_recibida_mes = row.ultima_cuota_social_recibida_mes || null;
+            p.ultima_cuota_social_pagada_mes = row.ultima_cuota_social_pagada_mes || null;
+            p.clases_restantes = row.clases_restantes !== null ? parseInt(row.clases_restantes, 10) : null;
             return p;
         });
 
@@ -163,7 +252,11 @@ export class Practicante {
         const allowedFields = [
             'nombre_completo', 'fecha_nacimiento', 'genero', 'telefono', 'email',
             'direccion', 'condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias',
-            'user_id', 'es_profesor'
+            'user_id', 'es_profesor',
+            'emergencia_nombre', 'emergencia_telefono', 'obra_social', 'obra_social_nro',
+            'emergencia_servicio', 'emergencia_servicio_telefono', 'ocupacion', 'estudios',
+            'actividad_fisica_actual', 'actividad_fisica_detalle', 'actividad_fisica_anios_inactivo',
+            'actividad_fisica_anterior', 'observaciones_adicionales'
         ];
 
         const updates = [];
@@ -305,7 +398,25 @@ export class Practicante {
             medicamentos: this.medicamentos,
             limitaciones_fisicas: this.limitaciones_fisicas,
             alergias: this.alergias,
+            emergencia_nombre: this.emergencia_nombre,
+            emergencia_telefono: this.emergencia_telefono,
+            obra_social: this.obra_social,
+            obra_social_nro: this.obra_social_nro,
+            emergencia_servicio: this.emergencia_servicio,
+            emergencia_servicio_telefono: this.emergencia_servicio_telefono,
+            ocupacion: this.ocupacion,
+            estudios: this.estudios,
+            actividad_fisica_actual: this.actividad_fisica_actual,
+            actividad_fisica_detalle: this.actividad_fisica_detalle,
+            actividad_fisica_anios_inactivo: this.actividad_fisica_anios_inactivo,
+            actividad_fisica_anterior: this.actividad_fisica_anterior,
+            observaciones_adicionales: this.observaciones_adicionales,
             socio_count: this.socio_count || 0,
+            ultimo_abono_nombre: this.ultimo_abono_nombre || null,
+            ultimo_abono_mes: this.ultimo_abono_mes || null,
+            ultima_cuota_social_recibida_mes: this.ultima_cuota_social_recibida_mes || null,
+            ultima_cuota_social_pagada_mes: this.ultima_cuota_social_pagada_mes || null,
+            clases_restantes: this.clases_restantes !== undefined ? this.clases_restantes : null,
             created_at: this.created_at,
             updated_at: this.updated_at,
             deleted_at: this.deleted_at

@@ -106,6 +106,17 @@ export function validatePracticante(data) {
     });
   }
 
+  // Validate actividad_fisica_anios_inactivo if provided
+  if (data.actividad_fisica_anios_inactivo !== undefined && data.actividad_fisica_anios_inactivo !== null && data.actividad_fisica_anios_inactivo !== '') {
+    const anios = parseInt(data.actividad_fisica_anios_inactivo, 10);
+    if (isNaN(anios) || anios < 0) {
+      errors.push({
+        field: 'actividad_fisica_anios_inactivo',
+        message: 'actividad_fisica_anios_inactivo must be a non-negative integer'
+      });
+    }
+  }
+
   if (errors.length > 0) {
     throw new ValidationError('Validation failed', errors);
   }

@@ -73,7 +73,11 @@ export class PracticanteService {
     // Track health field changes (FR-006)
     // We also want to log these specific changes to HistorialSalud for medical tracking
     // The general history will log the JSON blob change, but HistorialSalud is for specific medical field tracking
-    const healthFields = ['condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias'];
+    const healthFields = [
+      'condiciones_medicas', 'medicamentos', 'limitaciones_fisicas', 'alergias',
+      'emergencia_nombre', 'emergencia_telefono', 'obra_social', 'obra_social_nro',
+      'emergencia_servicio', 'emergencia_servicio_telefono'
+    ];
     const changes = [];
 
     for (const field of healthFields) {
