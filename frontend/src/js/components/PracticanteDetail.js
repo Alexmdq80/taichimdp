@@ -111,12 +111,10 @@ export class PracticanteDetail {
             </div>
 
             <div class="form-group">
-                <label for="cuota-monto-select">Importe Recibido:</label>
-                <select id="cuota-monto-select" name="monto" required>
-                    <!-- Options populated based on selected lugar -->
-                </select>
+                <label for="cuota-monto-input">Importe Recibido ($):</label>
+                <input type="number" id="cuota-monto-input" name="monto" step="0.01" required />
+                <div id="cuota-monto-shortcuts" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
             </div>
-
             <div class="form-group">
                 <label for="cuota-fecha-input">Fecha de Pago:</label>
                 <input type="date" id="cuota-fecha-input" name="fecha_pago" required />
@@ -326,6 +324,12 @@ export class PracticanteDetail {
             </div>
 
             <div id="selected-abono-details" style="margin-top: 1rem; padding: 10px; background: #f9f9f9; border-radius: 4px;"></div>
+            
+            <div class="form-group">
+                <label for="monto-input">Importe a Cobrar ($):</label>
+                <input type="number" id="monto-input" name="monto" step="0.01" required />
+            </div>
+
             <div class="form-group">
                 <label for="metodo-pago-select">Método de Pago:</label>
                 <select id="metodo-pago-select" name="metodo_pago" required>
@@ -404,21 +408,31 @@ export class PracticanteDetail {
         
             // Populate cuota lugar select
             const cuotaLugarSelect = this.container.querySelector('#cuota-lugar-select');
-            const montoSelect = this.container.querySelector('#cuota-monto-select');
+            const montoInput = this.container.querySelector('#cuota-monto-input');
+            const shortcutsDiv = this.container.querySelector('#cuota-monto-shortcuts');
             
             const updateMontoOptions = (socioId) => {
                 const socio = this.socios.find(s => s.id == socioId);
-                if (socio && montoSelect) {
+                if (socio && montoInput) {
                     const general = parseFloat(socio.cuota_social_general || 0);
                     const descuento = parseFloat(socio.cuota_social_descuento || 0);
                     
-                    let options = `<option value="${general}">Cuota General ($${general.toFixed(2)})</option>`;
+                    // Set default value (prefer discount if available)
+                    montoInput.value = (descuento > 0 ? descuento : general).toFixed(2);
+
+                    // Add shortcut buttons
+                    let shortcuts = `<button type="button" class="btn btn-sm btn-outline-info shortcut-btn" data-value="${general.toFixed(2)}">General ($${general.toFixed(2)})</button>`;
                     if (descuento > 0) {
-                        options += `<option value="${descuento}">Cuota con Descuento ($${descuento.toFixed(2)})</option>`;
+                        shortcuts += `<button type="button" class="btn btn-sm btn-outline-success shortcut-btn" data-value="${descuento.toFixed(2)}">Descuento ($${descuento.toFixed(2)})</button>`;
                     }
-                    montoSelect.innerHTML = options;
-                    // Pre-select discount if available
-                    if (descuento > 0) montoSelect.value = descuento;
+                    shortcutsDiv.innerHTML = shortcuts;
+
+                    // Attach events to shortcut buttons
+                    shortcutsDiv.querySelectorAll('.shortcut-btn').forEach(btn => {
+                        btn.onclick = () => {
+                            montoInput.value = btn.getAttribute('data-value');
+                        };
+                    });
                 }
             };
 
@@ -544,7 +558,7 @@ export class PracticanteDetail {
         receiveCuotaForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const socio_id = receiveCuotaForm.querySelector('#cuota-lugar-select').value;
-            const monto = receiveCuotaForm.querySelector('#cuota-monto-select').value;
+            const monto = receiveCuotaForm.querySelector('#cuota-monto-input').value;
             const fecha_pago = receiveCuotaForm.querySelector('#cuota-fecha-input').value;
             const mes = receiveCuotaForm.querySelector('#cuota-mes-select').value;
             const anio = receiveCuotaForm.querySelector('#cuota-anio-input').value;
@@ -632,12 +646,13 @@ export class PracticanteDetail {
             }
         }
 
-        // Hide quantity for group classes
-        if (categoria === 'grupal') {
+        // Show quantity for flexible classes OR single classes (duracion 0)
+        const isSingleClass = (duracion === 0);
+        if (isFlexible || isSingleClass) {
+            cantidadGroup.style.display = 'block';
+        } else {
             cantidadGroup.style.display = 'none';
             cantidadInput.value = 1;
-        } else {
-            cantidadGroup.style.display = 'block';
         }
 
         const cantidad = parseInt(cantidadInput.value, 10) || 1;
@@ -668,12 +683,20 @@ export class PracticanteDetail {
             <p><strong>Cantidad:</strong> ${cantidad}</p>
             ${duracionText}
             <hr>
-            <p style="font-size: 1.2rem; color: var(--primary-color);"><strong>Total a Pagar: $${totalAbono.toFixed(2)}</strong></p>
+            <p style="font-size: 1.1rem; color: var(--primary-color);"><strong>Total Sugerido: $${totalAbono.toFixed(2)}</strong></p>
         `;
+
+        // Update the editable amount input
+        const montoInput = this.container.querySelector('#monto-input');
+        if (montoInput) {
+            montoInput.value = totalAbono.toFixed(2);
+        }
     } else {
         detailsDiv.innerHTML = '';
         mesAbonoGroup.style.display = 'none';
         fechaVencimientoInput.value = '';
+        const montoInput = this.container.querySelector('#monto-input');
+        if (montoInput) montoInput.value = '';
     }
   }
 
@@ -700,6 +723,7 @@ export class PracticanteDetail {
     const paymentForm = this.container.querySelector('#payment-form');
     const tipoAbonoSelect = paymentForm.querySelector('#tipo-abono-select');
     const cantidadInput = paymentForm.querySelector('#cantidad-input');
+    const montoInput = paymentForm.querySelector('#monto-input');
     const mesAbonoSelect = paymentForm.querySelector('#mes-abono-select');
     const fechaVencimientoInput = paymentForm.querySelector('#fecha-vencimiento-input');
     const fechaPagoInput = paymentForm.querySelector('#fecha-pago-input');
@@ -711,6 +735,7 @@ export class PracticanteDetail {
     const fecha_pago = fechaPagoInput.value;
     const metodo_pago = metodoPagoSelect.value;
     const notas = notasTextarea.value;
+    const monto = montoInput.value;
 
     errorMessageElement.style.display = 'none';
 
@@ -741,6 +766,7 @@ export class PracticanteDetail {
         const payload = { 
             tipo_abono_id: parseInt(tipo_abono_id, 10), 
             cantidad: parseInt(cantidad, 10),
+            monto: parseFloat(monto),
             mes_abono: mes_abono,
             fecha_vencimiento,
             fecha_pago,

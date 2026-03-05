@@ -42,7 +42,7 @@ export class Abono {
             data.mes_abono || null,
             data.lugar_id || null,
             data.estado || 'activo',
-            data.cantidad || 1
+            data.cantidad !== undefined && data.cantidad !== null ? parseInt(data.cantidad, 10) : 1
         ];
 
         const executor = connection || pool;

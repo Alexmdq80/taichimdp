@@ -96,7 +96,7 @@ export class TipoAbonoList {
               </td>
               <td>
                 ${(tipoAbono.categoria === 'particular' || tipoAbono.categoria === 'compartida') ? '<em>Sin vencimiento</em>' : (tipoAbono.duracion_dias !== 0 ? tipoAbono.duracion_dias + ' días' : '<em>Clase suelta</em>')}
-                ${tipoAbono.categoria === 'grupal' ? `<br><small class="text-muted">${tipoAbono.clases_por_semana} clase${tipoAbono.clases_por_semana > 1 ? 's' : ''}/sem.</small>` : ''}
+                ${tipoAbono.categoria === 'grupal' && tipoAbono.clases_por_semana !== null ? `<br><small class="text-muted">${tipoAbono.clases_por_semana} clase${tipoAbono.clases_por_semana > 1 ? 's' : ''}/sem.</small>` : ''}
                 ${tipoAbono.categoria === 'compartida' ? `<br><small class="text-info">Compartida: ${tipoAbono.max_personas} pers.</small>` : ''}
               </td>
               <td>${tipoAbono.precio !== null && tipoAbono.precio !== undefined ? '$' + parseFloat(tipoAbono.precio).toFixed(2) : '-'}</td>

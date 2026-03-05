@@ -187,8 +187,21 @@ export class SociosPage {
                                 <p id="completar-display-mes" class="form-control-plaintext"></p>
                             </div>
 
-                            <div class="form-row">
-                                <div class="form-group col-md-6">
+                            <!-- Box for Tarifa -->
+                            <div id="completar-tarifa-info" class="card" style="background-color: #f8f9fa; padding: 10px; margin-bottom: 1rem; border: 1px solid #dee2e6;">
+                                <h4 style="margin-top: 0; font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Tarifas Vigentes en esta Sede</h4>
+                                <div class="flex justify-between" style="font-size: 0.85rem;">
+                                    <span>General: <strong id="completar-tarifa-general">$-</strong></span>
+                                    <span>Bonificada: <strong id="completar-tarifa-descuento">$-</strong></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="completar-monto"><strong>Importe Recibido ($):</strong></label>
+                                <input type="number" id="completar-monto" class="form-control" step="0.01" required>
+                            </div>
+
+                            <div class="form-row">                                <div class="form-group col-md-6">
                                     <label for="completar-fecha">Fecha de Pago (Efectiva)</label>
                                     <input type="date" id="completar-fecha" class="form-control" required>
                                 </div>
@@ -328,10 +341,15 @@ export class SociosPage {
         this.container.querySelector('#completar-pago-id').value = pago.id;
         this.container.querySelector('#completar-display-socio').textContent = this.selectedSocio.nombre_completo;
         this.container.querySelector('#completar-display-mes').textContent = pago.mes_abono;
-        
+
+        // Populate Tarifa and current amount
+        this.container.querySelector('#completar-tarifa-general').textContent = `$${parseFloat(this.selectedSocio.cuota_social_general || 0).toFixed(2)}`;
+        this.container.querySelector('#completar-tarifa-descuento').textContent = `$${parseFloat(this.selectedSocio.cuota_social_descuento || 0).toFixed(2)}`;
+        this.container.querySelector('#completar-monto').value = parseFloat(pago.monto || 0).toFixed(2);
+
         const today = new Date();
         this.container.querySelector('#completar-fecha').value = formatDate(today);
-        
+
         // Suggest next vencimiento based on today (usually 10th of next month)
         const suggestedVenc = new Date(today.getFullYear(), today.getMonth() + 1, 10);
         this.container.querySelector('#completar-vencimiento').value = formatDate(suggestedVenc);
@@ -343,6 +361,7 @@ export class SociosPage {
     async handleUpdatePago() {
         const id = this.container.querySelector('#completar-pago-id').value;
         const data = {
+            monto: parseFloat(this.container.querySelector('#completar-monto').value),
             fecha_pago: this.container.querySelector('#completar-fecha').value,
             fecha_vencimiento: this.container.querySelector('#completar-vencimiento').value,
             observaciones: this.container.querySelector('#completar-observaciones').value
@@ -357,7 +376,6 @@ export class SociosPage {
             displayApiError(error);
         }
     }
-
     checkDuplicatePayment() {
         const month = this.container.querySelector('#pago-mes').value;
         const year = this.container.querySelector('#pago-anio').value;
@@ -535,50 +553,64 @@ export class SociosPage {
                         <h3>Historial de Cuotas Sociales</h3>
                         <p><strong>Socio:</strong> ${this.selectedSocio.nombre_completo} | <strong>Lugar:</strong> ${this.selectedSocio.lugar_nombre} | <strong>Nº:</strong> ${this.selectedSocio.numero_socio || 'S/N'}</p>
                     </div>
-                    <div>
+                    <div class="text-right">
+                        <div class="card p-2 mb-0" style="background: #fff; border: 1px solid #ddd; display: inline-block;">
+                            <small class="text-muted d-block">Tarifas Establecidas:</small>
+                            <strong>General: $${parseFloat(this.selectedSocio.cuota_social_general).toFixed(2)}</strong> | 
+                            <strong>Bonificada: $${parseFloat(this.selectedSocio.cuota_social_descuento).toFixed(2)}</strong>
+                        </div>
                         <button id="back-to-list" class="btn btn-outline-secondary ml-2">Volver al listado</button>
                     </div>
                 </div>
             </div>
-            
+
             <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
                             <th>Fecha Pago</th>
                             <th>Mes Abonado</th>
-                            <th>Monto</th>
+                            <th>Monto Recibido</th>
+                            <th>Monto Pagado</th>
+                            <th>Tarifas (Gral/Bonif)</th>
                             <th>Vencimiento</th>
-                            <th>Tipo</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${this.payments.length === 0 ? '<tr><td colspan="6" class="text-center p-4 text-muted">No hay cuotas registradas.</td></tr>' : ''}
-                        ${this.payments.map(p => `
-                            <tr>
-                                <td>${p.fecha_pago ? formatDateReadable(p.fecha_pago) : '-'}</td>
-                                <td><strong>${p.mes_abono}</strong></td>
-                                <td>$${parseFloat(p.monto).toFixed(2)}</td>
-                                <td class="${p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'text-danger font-weight-bold' : ''}">
-                                    ${p.fecha_vencimiento ? formatDateReadable(p.fecha_vencimiento) : '<em class="text-muted">a determinar...</em>'}
-                                </td>
-                                <td>
-                                    <span class="badge ${p.es_profesor ? 'badge-danger' : 'badge-secondary'}">
-                                        ${p.es_profesor ? 'Costo Profesor' : 'Cobro Socio'}
-                                    </span>
-                                </td>
-                                <td>
-                                    ${!p.fecha_pago ? `<button class="btn btn-sm btn-warning complete-pago-btn" data-id="${p.id}"><i class="fas fa-edit"></i> Completar</button>` : ''}
-                                    <button class="btn btn-sm btn-outline-danger delete-pago-btn" data-id="${p.id}">Eliminar</button>
-                                </td>
-                            </tr>
-                        `).join('')}
+                        ${this.payments.length === 0 ? '<tr><td colspan="7" class="text-center p-4 text-muted">No hay cuotas registradas.</td></tr>' : ''}
+                        ${this.payments.map(p => {
+                            // Monto Recibido: from Pago model (monto_recibido_pago)
+                            // If it's a teacher, we don't usually have a "Recibido" from them in incomes
+                            const montoRecibido = !p.es_profesor && p.monto_recibido_pago ? '$' + parseFloat(p.monto_recibido_pago).toFixed(2) : '-';
+                            
+                            // Monto Pagado: from PagoSocio model (monto)
+                            // Shown when the payment to the club is completed (fecha_pago exists) or if it's a teacher
+                            const montoPagado = (p.es_profesor || p.fecha_pago) ? '$' + parseFloat(p.monto).toFixed(2) : '-';
+
+                            return `
+                                <tr>
+                                    <td>${p.fecha_pago ? formatDateReadable(p.fecha_pago) : '-'}</td>
+                                    <td><strong>${p.mes_abono}</strong></td>
+                                    <td class="text-success">${montoRecibido}</td>
+                                    <td class="text-danger">${montoPagado}</td>
+                                    <td><small class="text-muted">$${parseFloat(p.tarifa_general || this.selectedSocio.cuota_social_general).toFixed(2)} / $${parseFloat(p.tarifa_descuento || this.selectedSocio.cuota_social_descuento).toFixed(2)}</small></td>
+                                    <td class="${p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'text-danger font-weight-bold' : ''}">
+                                        ${p.fecha_vencimiento ? formatDateReadable(p.fecha_vencimiento) : '<em class="text-muted">a determinar...</em>'}
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-1">
+                                            ${!p.fecha_pago ? `<button class="btn btn-sm btn-info complete-pago-btn" data-id="${p.id}" title="Completar Pago"><i class="fas fa-edit"></i></button>` : ''}
+                                            <button class="btn btn-sm btn-outline-danger delete-pago-btn" data-id="${p.id}" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
         `;
-
         this.container.querySelector('#back-to-list').onclick = () => {
             this.view = 'list';
             this.render();

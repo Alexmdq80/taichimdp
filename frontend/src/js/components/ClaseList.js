@@ -59,6 +59,8 @@ export class ClaseList {
                         ${this.formatTipo(c.tipo)}
                     </span>
                 </td>
+                <td>${c.actividad_nombre || '-'}</td>
+                <td>${c.lugar_nombre || '-'}</td>
                 <td>
                   <span class="badge ${statusBadges[c.estado] || 'badge-secondary'}">
                     ${c.estado.charAt(0).toUpperCase() + c.estado.slice(1)}

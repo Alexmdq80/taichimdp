@@ -21,6 +21,10 @@ export class PagoSocio {
         this.es_profesor = data.es_profesor !== undefined ? !!data.es_profesor : false;
         this.nombre_completo = data.nombre_completo || null;
         this.lugar_nombre = data.lugar_nombre || null;
+        this.tarifa_general = data.tarifa_general || 0;
+        this.tarifa_descuento = data.tarifa_descuento || 0;
+        this.monto_recibido_pago = data.monto_recibido_pago || null;
+        this.linked_abono_id = data.linked_abono_id || null;
     }
 
     static async existsForSocioAndMonth(socioId, mesAbono, excludeId = null) {
@@ -38,11 +42,16 @@ export class PagoSocio {
 
     static async findAll(filters = {}) {
         let sql = `
-            SELECT ps.*, p.nombre_completo, l.nombre as lugar_nombre, p.es_profesor
+            SELECT ps.*, p.nombre_completo, l.nombre as lugar_nombre, p.es_profesor,
+                   COALESCE(lp.cuota_social_general, l.cuota_social_general) as tarifa_general,
+                   COALESCE(lp.cuota_social_descuento, l.cuota_social_descuento) as tarifa_descuento,
+                   pg.monto as monto_recibido_pago, pg.abono_id as linked_abono_id
             FROM PagoSocio ps
             JOIN Socio s ON ps.socio_id = s.id
             JOIN Practicante p ON s.practicante_id = p.id
-            JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar lp ON l.parent_id = lp.id
+            LEFT JOIN Pago pg ON pg.pago_socio_id = ps.id AND pg.deleted_at IS NULL
             WHERE ps.deleted_at IS NULL
         `;
         const params = [];
@@ -52,7 +61,7 @@ export class PagoSocio {
             params.push(filters.socio_id);
         }
 
-        sql += ' ORDER BY ps.fecha_pago DESC';
+        sql += ' ORDER BY ps.fecha_pago IS NULL DESC, ps.fecha_pago DESC, ps.id DESC';
 
         const [rows] = await pool.execute(sql, params);
         return rows.map(row => new PagoSocio(row));
@@ -60,10 +69,16 @@ export class PagoSocio {
 
     static async findById(id, connection = null) {
         const sql = `
-            SELECT ps.*, p.es_profesor
+            SELECT ps.*, p.nombre_completo, l.nombre as lugar_nombre, p.es_profesor,
+                   COALESCE(lp.cuota_social_general, l.cuota_social_general) as tarifa_general,
+                   COALESCE(lp.cuota_social_descuento, l.cuota_social_descuento) as tarifa_descuento,
+                   pg.monto as monto_recibido_pago, pg.abono_id as linked_abono_id
             FROM PagoSocio ps
             JOIN Socio s ON ps.socio_id = s.id
             JOIN Practicante p ON s.practicante_id = p.id
+            LEFT JOIN Lugar l ON s.lugar_id = l.id
+            LEFT JOIN Lugar lp ON l.parent_id = lp.id
+            LEFT JOIN Pago pg ON pg.pago_socio_id = ps.id AND pg.deleted_at IS NULL
             WHERE ps.id = ? AND ps.deleted_at IS NULL
         `;
         const executor = connection || pool;
@@ -154,22 +169,29 @@ export class PagoSocio {
 
     toJSON() {
         // Asegurar que las fechas sean YYYY-MM-DD para el frontend
-        const formatDate = (date) => {
+        const formatDateStr = (date) => {
             if (!date) return null;
             if (date instanceof Date) return date.toISOString().split('T')[0];
-            return date.includes('T') ? date.split('T')[0] : date;
+            const s = String(date);
+            return s.includes('T') ? s.split('T')[0] : s;
         };
 
         return {
             id: this.id,
             socio_id: this.socio_id,
             monto: this.monto,
-            fecha_pago: formatDate(this.fecha_pago),
+            fecha_pago: formatDateStr(this.fecha_pago),
             mes_abono: this.mes_abono,
-            fecha_vencimiento: formatDate(this.fecha_vencimiento),
+            fecha_vencimiento: formatDateStr(this.fecha_vencimiento),
             observaciones: this.observaciones,
             usuario_id: this.usuario_id,
             es_profesor: this.es_profesor,
+            nombre_completo: this.nombre_completo,
+            lugar_nombre: this.lugar_nombre,
+            tarifa_general: this.tarifa_general,
+            tarifa_descuento: this.tarifa_descuento,
+            monto_recibido_pago: this.monto_recibido_pago,
+            linked_abono_id: this.linked_abono_id,
             created_at: this.created_at,
             updated_at: this.updated_at
         };

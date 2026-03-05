@@ -93,8 +93,9 @@ export class PagoService {
             const newAbono = await Abono.create(abonoData, connection, userId);
 
             // 4. Create Pago record linked to the new Abono
-            let totalMonto = (tipoAbono.precio || 0) * cantidad;
+            let totalMonto = extraData.monto !== undefined ? parseFloat(extraData.monto) : (tipoAbono.precio || 0) * cantidad;
             let finalNotas = notas || '';
+            let pagoSocioId = null;
 
             // Handle Social Fee if requested - Only sum the money and add a note
             if (extraData.cuota_social) {
@@ -102,11 +103,32 @@ export class PagoService {
                 totalMonto += parseFloat(cs.monto || 0);
                 const socialFeeNote = `[RECIBIDO CUOTA SOCIAL: $${cs.monto}]`;
                 finalNotas = finalNotas ? `${finalNotas} | ${socialFeeNote}` : socialFeeNote;
+
+                // Create PagoSocio record so it appears in "Gestión de Socios"
+                const socio = await Socio.findByPracticanteAndLugar(practicanteId, abonoData.lugar_id, connection);
+                if (socio) {
+                    // Check if already paid for this month to avoid duplicates
+                    const mesAbono = abonoData.mes_abono;
+                    const alreadyPaid = await PagoSocio.existsForSocioAndMonth(socio.id, mesAbono);
+                    
+                    if (!alreadyPaid) {
+                        const newPagoSocio = await PagoSocio.create({
+                            socio_id: socio.id,
+                            monto: parseFloat(cs.monto),
+                            mes_abono: mesAbono,
+                            fecha_pago: fechaPagoStr,
+                            fecha_vencimiento: null, // Will be completed in Gestion Socios
+                            observaciones: `Registrado junto con abono ${newAbono.id}`
+                        }, connection, userId);
+                        pagoSocioId = newPagoSocio.id;
+                    }
+                }
             }
 
             const pagoData = {
                 practicante_id: practicanteId,
                 abono_id: newAbono.id, // Linked to the newly created Abono
+                pago_socio_id: pagoSocioId,
                 mes_abono: abonoData.mes_abono,
                 lugar_id: abonoData.lugar_id,
                 fecha: fechaPagoStr,

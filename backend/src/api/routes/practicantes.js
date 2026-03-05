@@ -143,7 +143,7 @@ router.post('/:id/pagar', asyncHandler(async (req, res) => {
     throw new AppError('Invalid Practicante ID: ID must be a valid integer', 400);
   }
 
-  const { tipo_abono_id, metodo_pago, notas, cantidad, mes_abono, fecha_vencimiento, fecha_pago, lugar_id } = req.body; // Destructure new fields
+  const { tipo_abono_id, monto, metodo_pago, notas, cantidad, mes_abono, fecha_vencimiento, fecha_pago, lugar_id } = req.body; // Destructure new fields
   const tipoAbonoId = parseInt(tipo_abono_id, 10);
   if (isNaN(tipoAbonoId) || tipoAbonoId <= 0) {
     throw new AppError('Invalid Tipo de Abono ID: Must be a positive integer', 400);
@@ -155,6 +155,7 @@ router.post('/:id/pagar', asyncHandler(async (req, res) => {
   }
 
   const extraData = {
+    monto: monto !== undefined ? parseFloat(monto) : undefined,
     mes_abono: mes_abono || null,
     fecha_vencimiento: fecha_vencimiento || null,
     fecha_pago: fecha_pago || null,

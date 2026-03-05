@@ -32,6 +32,20 @@ export class TipoAbono {
         try {
             await connection.beginTransaction();
 
+            const categoria = data.categoria || 'grupal';
+            const isFlexible = (categoria === 'particular' || categoria === 'compartida');
+            const duracionDias = data.duracion_dias !== undefined ? data.duracion_dias : null;
+            
+            // clases_por_semana is NULL if flexible OR single class (duracion 0)
+            const clasesPorSemana = (isFlexible || duracionDias === 0) ? null : (data.clases_por_semana !== undefined ? data.clases_por_semana : 1);
+            
+            let maxPersonas = null;
+            if (categoria === 'particular') {
+                maxPersonas = 1;
+            } else if (categoria === 'compartida') {
+                maxPersonas = data.max_personas !== undefined ? data.max_personas : 2;
+            }
+
             const sql = `
                 INSERT INTO TipoAbono (
                     nombre, descripcion, duracion_dias, precio, clases_por_semana, max_personas, categoria, lugar_id
@@ -41,11 +55,11 @@ export class TipoAbono {
             const values = [
                 data.nombre,
                 data.descripcion !== undefined ? data.descripcion : null,
-                data.duracion_dias !== undefined ? data.duracion_dias : null,
+                duracionDias,
                 data.precio !== undefined ? data.precio : null,
-                data.clases_por_semana !== undefined ? data.clases_por_semana : 1,
-                data.max_personas !== undefined ? data.max_personas : 1,
-                data.categoria || 'grupal',
+                clasesPorSemana,
+                maxPersonas,
+                categoria,
                 data.lugar_id || null
             ];
 
@@ -154,6 +168,25 @@ export class TipoAbono {
             await connection.beginTransaction();
 
             const allowedFields = ['nombre', 'descripcion', 'duracion_dias', 'precio', 'clases_por_semana', 'max_personas', 'categoria', 'lugar_id'];
+            
+            // Logic to handle category change and its impact on clases_por_semana
+            const targetCategoria = data.categoria || currentData.categoria;
+            const isFlexible = (targetCategoria === 'particular' || targetCategoria === 'compartida');
+            const duracionDias = data.duracion_dias !== undefined ? data.duracion_dias : currentData.duracion_dias;
+            
+            // clases_por_semana is NULL if flexible OR single class (duracion 0)
+            if (isFlexible || duracionDias === 0) {
+                data.clases_por_semana = null;
+            }
+            
+            if (targetCategoria === 'particular') {
+                data.max_personas = 1;
+            } else if (targetCategoria === 'compartida') {
+                data.max_personas = data.max_personas !== undefined ? data.max_personas : (currentData.max_personas || 2);
+            } else {
+                data.max_personas = null;
+            }
+
             const updates = [];
             const values = [];
 

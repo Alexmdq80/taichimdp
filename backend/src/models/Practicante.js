@@ -185,12 +185,13 @@ export class Practicante {
                  ORDER BY ps.fecha_pago DESC, ps.id DESC LIMIT 1) as ultima_cuota_social_pagada_mes,
                  
                 -- Clases restantes (Balance histórico: compradas - asistidas)
+                -- Incluye clases particulares/compartidas Y clases sueltas (duracion 0)
                 (SELECT 
                     (SELECT IFNULL(SUM(ab.cantidad), 0) 
                      FROM Abono ab 
                      JOIN TipoAbono ta ON ab.tipo_abono_id = ta.id 
                      WHERE ab.practicante_id = p.id 
-                       AND ta.categoria IN ('particular', 'compartida') 
+                       AND (ta.categoria IN ('particular', 'compartida') OR ta.duracion_dias = 0)
                        AND ab.deleted_at IS NULL)
                     -
                     (SELECT COUNT(*) 
@@ -199,9 +200,20 @@ export class Practicante {
                      WHERE asis.practicante_id = p.id 
                        AND asis.asistio = 1 
                        AND cl.deleted_at IS NULL
-                       AND cl.tipo = 'flexible'
+                       AND (cl.tipo = 'flexible' OR EXISTS (
+                           SELECT 1 FROM TipoAbono ta2 
+                           JOIN Abono ab2 ON ta2.id = ab2.tipo_abono_id
+                           WHERE ab2.id = cl.horario_id -- Note: if it was a manual class, we might need more logic
+                           AND ta2.duracion_dias = 0
+                       ))
                        AND cl.fecha <= CURDATE())
-                 WHERE EXISTS (SELECT 1 FROM Abono ab3 JOIN TipoAbono ta3 ON ab3.tipo_abono_id = ta3.id WHERE ab3.practicante_id = p.id AND ta3.categoria IN ('particular', 'compartida') AND ab3.deleted_at IS NULL)
+                 WHERE EXISTS (
+                     SELECT 1 FROM Abono ab3 
+                     JOIN TipoAbono ta3 ON ab3.tipo_abono_id = ta3.id 
+                     WHERE ab3.practicante_id = p.id 
+                       AND (ta3.categoria IN ('particular', 'compartida') OR ta3.duracion_dias = 0) 
+                       AND ab3.deleted_at IS NULL
+                 )
                 ) as clases_restantes
 
             FROM Practicante p${whereClause} 

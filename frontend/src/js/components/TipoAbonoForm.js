@@ -280,7 +280,7 @@ export class TipoAbonoForm {
     for (const [key, value] of formData.entries()) {
       if (key === 'horarios') continue; // Handled above
 
-      if (value !== null && value.trim() !== '') {
+      if (value !== null && typeof value === 'string' && value.trim() !== '') {
         // Handle numbers
         if (key === 'duracion_dias' || key === 'clases_por_semana' || key === 'max_personas' || key === 'lugar_id') {
             data[key] = parseInt(value, 10);
@@ -292,6 +292,26 @@ export class TipoAbonoForm {
       } else {
         data[key] = null;
       }
+    }
+
+    // Business Logic: For flexible categories, certain fields must be NULL
+    if (data.categoria === 'particular' || data.categoria === 'compartida') {
+        data.clases_por_semana = null;
+        data.duracion_dias = null;
+        data.horarios = [];
+
+        if (data.categoria === 'particular') {
+            data.max_personas = 1;
+        }
+        // if compartida, it keeps the value from input (min 2)
+    } else {
+        // For non-flexible classes, if duracion_dias is 0 (single class), clases_por_semana should be NULL
+        if (data.duracion_dias === 0) {
+            data.clases_por_semana = null;
+        } else {
+            data.clases_por_semana = data.clases_por_semana || 1;
+        }
+        data.max_personas = null;
     }
 
     return data;
