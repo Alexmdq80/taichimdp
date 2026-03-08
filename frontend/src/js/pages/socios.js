@@ -157,6 +157,16 @@ export class SociosPage {
                                 <textarea id="pago-observaciones" class="form-control" rows="2"></textarea>
                             </div>
 
+                            <div class="card p-3 mb-3" style="background-color: #f1f5f9; border: 1px dashed #cbd5e1;">
+                                <div class="form-group mb-0">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="pago-desconocido" style="width: auto; margin: 0;">
+                                        <span><strong>Estado desconocido / Relación directa</strong></span>
+                                    </label>
+                                    <small class="text-muted d-block ml-4">Se desconoce si pagó al club o tiene relación directa. No se registra movimiento de dinero.</small>
+                                </div>
+                            </div>
+
                             <div class="form-actions mt-4">
                                 <button type="submit" class="btn btn-success">Registrar Pago</button>
                                 <button type="button" class="btn btn-secondary cancel-pago-modal">Cancelar</button>
@@ -182,9 +192,46 @@ export class SociosPage {
                                 <p id="completar-display-socio" class="form-control-plaintext"></p>
                             </div>
                             
-                            <div class="form-group">
-                                <label><strong>Mes que abonó:</strong></label>
-                                <p id="completar-display-mes" class="form-control-plaintext"></p>
+                            <div class="form-row">
+                                <div class="form-group col-md-4">
+                                    <label for="completar-mes">Mes de Cuota</label>
+                                    <select id="completar-mes" class="form-control" required>
+                                        <option value="Enero">Enero</option>
+                                        <option value="Febrero">Febrero</option>
+                                        <option value="Marzo">Marzo</option>
+                                        <option value="Abril">Abril</option>
+                                        <option value="Mayo">Mayo</option>
+                                        <option value="Junio">Junio</option>
+                                        <option value="Julio">Julio</option>
+                                        <option value="Agosto">Agosto</option>
+                                        <option value="Septiembre">Septiembre</option>
+                                        <option value="Octubre">Octubre</option>
+                                        <option value="Noviembre">Noviembre</option>
+                                        <option value="Diciembre">Diciembre</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label for="completar-anio">Año</label>
+                                    <input type="number" id="completar-anio" class="form-control" required value="${new Date().getFullYear()}">
+                                </div>
+                            </div>
+
+                            <div id="completar-status-card" class="card p-3 mb-3" style="background-color: #f1f5f9; border: 1px dashed #cbd5e1; display: none;">
+                                <div class="form-group mb-0">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="completar-desconocido" style="width: auto; margin: 0;">
+                                        <span><strong>Estado desconocido / Relación directa</strong></span>
+                                    </label>
+                                    <small class="text-muted d-block ml-4">Marque esta opción si se desentiende de la gestión de cobro para este mes.</small>
+                                </div>
+                            </div>
+
+                            <div id="completar-ingreso-info" class="alert alert-info" style="display: none; padding: 0.5rem 1rem; margin-bottom: 1rem;">
+                                <i class="fas fa-info-circle"></i> Hay un cobro recibido por: <strong id="completar-ingreso-monto">$-</strong>
+                            </div>
+
+                            <div id="completar-no-ingreso-warning" class="alert alert-warning" style="display: none; padding: 0.5rem 1rem; margin-bottom: 1rem;">
+                                <i class="fas fa-exclamation-circle"></i> No hay cobro previo para este mes.
                             </div>
 
                             <!-- Box for Tarifa -->
@@ -201,13 +248,14 @@ export class SociosPage {
                                 <input type="number" id="completar-monto" class="form-control" step="0.01" required>
                             </div>
 
-                            <div class="form-row">                                <div class="form-group col-md-6">
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
                                     <label for="completar-fecha">Fecha de Pago (Efectiva)</label>
-                                    <input type="date" id="completar-fecha" class="form-control" required>
+                                    <input type="date" id="completar-fecha" class="form-control">
                                 </div>
                                 <div class="form-group col-md-6">
                                     <label for="completar-vencimiento">Próximo Vencimiento</label>
-                                    <input type="date" id="completar-vencimiento" class="form-control" required>
+                                    <input type="date" id="completar-vencimiento" class="form-control">
                                 </div>
                             </div>
 
@@ -282,6 +330,9 @@ export class SociosPage {
         // Pago Modal events
         const pagoModal = this.container.querySelector('#pago-socio-modal');
         if (pagoModal) {
+            const tipoMontoSelect = this.container.querySelector('#pago-tipo-monto');
+            const montoInput = this.container.querySelector('#pago-monto');
+
             this.container.querySelector('.close-pago-modal').onclick = () => pagoModal.style.display = 'none';
             this.container.querySelector('.cancel-pago-modal').onclick = () => pagoModal.style.display = 'none';
             this.container.querySelector('#pago-socio-form').onsubmit = async (e) => {
@@ -289,10 +340,8 @@ export class SociosPage {
                 await this.handleSavePago();
             };
 
-            const tipoMontoSelect = this.container.querySelector('#pago-tipo-monto');
-            if (tipoMontoSelect) {
+            if (tipoMontoSelect && montoInput) {
                 tipoMontoSelect.addEventListener('change', () => {
-                    const montoInput = this.container.querySelector('#pago-monto');
                     if (tipoMontoSelect.value === 'general') {
                         montoInput.value = this.selectedSocio.cuota_social_general;
                         montoInput.readOnly = true;
@@ -313,6 +362,27 @@ export class SociosPage {
                 monthSelect.addEventListener('change', triggerCheck);
                 yearInput.addEventListener('input', triggerCheck);
             }
+
+            // Direct payment and unknown status handlers
+            const directoCheck = this.container.querySelector('#pago-directo');
+            const desconocidoCheck = this.container.querySelector('#pago-desconocido');
+
+            if (directoCheck && desconocidoCheck && montoInput && tipoMontoSelect) {
+                const handleSpecialStatus = (event) => {
+                    if (directoCheck.checked || desconocidoCheck.checked) {
+                        montoInput.value = "0.00";
+                        montoInput.readOnly = true;
+                        tipoMontoSelect.disabled = true;
+                        if (directoCheck.checked && event.target === directoCheck) desconocidoCheck.checked = false;
+                        if (desconocidoCheck.checked && event.target === desconocidoCheck) directoCheck.checked = false;
+                    } else {
+                        tipoMontoSelect.disabled = false;
+                        tipoMontoSelect.dispatchEvent(new Event('change')); // Restore amount based on select
+                    }
+                };
+                directoCheck.addEventListener('change', handleSpecialStatus);
+                desconocidoCheck.addEventListener('change', handleSpecialStatus);
+            }
         }
 
         // Completar Modal events
@@ -324,6 +394,37 @@ export class SociosPage {
                 e.preventDefault();
                 await this.handleUpdatePago();
             };
+
+            const desconocidoCheck = this.container.querySelector('#completar-desconocido');
+            const montoInput = this.container.querySelector('#completar-monto');
+            const fechaInput = this.container.querySelector('#completar-fecha');
+            const vencInput = this.container.querySelector('#completar-vencimiento');
+            const mesSelect = this.container.querySelector('#completar-mes');
+            const anioInput = this.container.querySelector('#completar-anio');
+
+            if (desconocidoCheck && montoInput && fechaInput && vencInput) {
+                const handleSpecialStatus = () => {
+                    if (desconocidoCheck.checked) {
+                        montoInput.value = "0.00";
+                        montoInput.readOnly = true;
+                        fechaInput.value = "";
+                        fechaInput.disabled = true;
+                        vencInput.value = "";
+                        vencInput.disabled = true;
+                    } else {
+                        montoInput.readOnly = false;
+                        fechaInput.disabled = false;
+                        vencInput.disabled = false;
+                        this.checkCompletarStatus();
+                    }
+                };
+                desconocidoCheck.addEventListener('change', handleSpecialStatus);
+            }
+
+            if (mesSelect && anioInput) {
+                mesSelect.addEventListener('change', () => this.checkCompletarStatus());
+                anioInput.addEventListener('input', () => this.checkCompletarStatus());
+            }
         }
 
         window.onclick = (event) => {
@@ -333,43 +434,136 @@ export class SociosPage {
         };
     }
 
-    openCompletePagoModal(pagoId) {
-        const pago = this.payments.find(p => p.id === pagoId);
-        if (!pago) return;
-
+    openCompletePagoModal(pagoId = null) {
         const modal = this.container.querySelector('#pago-completar-modal');
-        this.container.querySelector('#completar-pago-id').value = pago.id;
+        const pago = pagoId ? this.payments.find(p => p.id === pagoId) : null;
+        
+        this.container.querySelector('#completar-pago-id').value = pago ? pago.id : '';
         this.container.querySelector('#completar-display-socio').textContent = this.selectedSocio.nombre_completo;
-        this.container.querySelector('#completar-display-mes').textContent = pago.mes_abono;
+        
+        // Month/Year
+        const today = new Date();
+        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        
+        if (pago) {
+            const parts = pago.mes_abono.split(' ');
+            this.container.querySelector('#completar-mes').value = parts[0];
+            this.container.querySelector('#completar-anio').value = parts[1];
+        } else {
+            this.container.querySelector('#completar-mes').value = months[today.getMonth()];
+            this.container.querySelector('#completar-anio').value = today.getFullYear();
+        }
 
-        // Populate Tarifa and current amount
+        // Tarifa info
         this.container.querySelector('#completar-tarifa-general').textContent = `$${parseFloat(this.selectedSocio.cuota_social_general || 0).toFixed(2)}`;
         this.container.querySelector('#completar-tarifa-descuento').textContent = `$${parseFloat(this.selectedSocio.cuota_social_descuento || 0).toFixed(2)}`;
-        this.container.querySelector('#completar-monto').value = parseFloat(pago.monto || 0).toFixed(2);
 
-        const today = new Date();
-        this.container.querySelector('#completar-fecha').value = formatDate(today);
-
-        // Suggest next vencimiento based on today (usually 10th of next month)
+        // Dates
+        this.container.querySelector('#completar-fecha').value = pago ? (pago.fecha_pago || formatDate(today)) : formatDate(today);
+        
         const suggestedVenc = new Date(today.getFullYear(), today.getMonth() + 1, 10);
-        this.container.querySelector('#completar-vencimiento').value = formatDate(suggestedVenc);
-        this.container.querySelector('#completar-observaciones').value = "";
+        this.container.querySelector('#completar-vencimiento').value = pago ? (pago.fecha_vencimiento || formatDate(suggestedVenc)) : formatDate(suggestedVenc);
+        
+        this.container.querySelector('#completar-observaciones').value = pago ? (pago.observaciones || "") : "";
+
+        // Reset status
+        const desconocidoCheck = this.container.querySelector('#completar-desconocido');
+        if (desconocidoCheck) desconocidoCheck.checked = pago ? !!pago.estado_desconocido : false;
+
+        this.checkCompletarStatus();
 
         modal.style.display = 'block';
     }
 
+    checkCompletarStatus() {
+        const mes = this.container.querySelector('#completar-mes').value;
+        const anio = this.container.querySelector('#completar-anio').value;
+        const mesAbono = `${mes} ${anio}`;
+        
+        // Find existing record for this month
+        const existing = this.payments.find(p => p.mes_abono === mesAbono);
+        
+        const idInput = this.container.querySelector('#completar-pago-id');
+        const incomeInfo = this.container.querySelector('#completar-ingreso-info');
+        const incomeMonto = this.container.querySelector('#completar-ingreso-monto');
+        const noIncomeWarning = this.container.querySelector('#completar-no-ingreso-warning');
+        const statusCard = this.container.querySelector('#completar-status-card');
+        const montoInput = this.container.querySelector('#completar-monto');
+        const fechaInput = this.container.querySelector('#completar-fecha');
+        const vencInput = this.container.querySelector('#completar-vencimiento');
+        const desconocidoCheck = this.container.querySelector('#completar-desconocido');
+
+        // Update ID if found (so we PUT instead of POST)
+        idInput.value = existing ? existing.id : '';
+
+        if (existing && existing.monto_recibido_pago > 0) {
+            incomeInfo.style.display = 'block';
+            incomeMonto.textContent = `$${parseFloat(existing.monto_recibido_pago).toFixed(2)}`;
+            noIncomeWarning.style.display = 'none';
+            statusCard.style.display = 'none'; // Cannot mark as unknown if we have income
+            desconocidoCheck.checked = false;
+            montoInput.value = parseFloat(existing.monto_recibido_pago).toFixed(2);
+            montoInput.readOnly = false;
+            fechaInput.disabled = false;
+            vencInput.disabled = false;
+        } else {
+            incomeInfo.style.display = 'none';
+            noIncomeWarning.style.display = 'block';
+            statusCard.style.display = 'block';
+            
+            if (desconocidoCheck.checked) {
+                montoInput.value = "0.00";
+                montoInput.readOnly = true;
+                fechaInput.value = "";
+                fechaInput.disabled = true;
+                vencInput.value = "";
+                vencInput.disabled = true;
+            } else {
+                fechaInput.disabled = false;
+                vencInput.disabled = false;
+                if (existing) {
+                    montoInput.value = parseFloat(existing.monto || 0).toFixed(2);
+                    montoInput.readOnly = false;
+                } else {
+                    montoInput.value = "";
+                    montoInput.readOnly = false;
+                }
+            }
+        }
+    }
+
     async handleUpdatePago() {
         const id = this.container.querySelector('#completar-pago-id').value;
+        const mes = this.container.querySelector('#completar-mes').value;
+        const anio = this.container.querySelector('#completar-anio').value;
+        const isDesconocido = this.container.querySelector('#completar-desconocido').checked;
+        const fechaPago = this.container.querySelector('#completar-fecha').value;
+        const fechaVenc = this.container.querySelector('#completar-vencimiento').value;
+
+        // Validation
+        if (!isDesconocido && (!fechaPago || !fechaVenc)) {
+            alert('Por favor, complete la fecha de pago y el próximo vencimiento.');
+            return;
+        }
+        
         const data = {
+            socio_id: this.selectedSocio.id,
             monto: parseFloat(this.container.querySelector('#completar-monto').value),
-            fecha_pago: this.container.querySelector('#completar-fecha').value,
-            fecha_vencimiento: this.container.querySelector('#completar-vencimiento').value,
-            observaciones: this.container.querySelector('#completar-observaciones').value
+            fecha_pago: isDesconocido ? null : fechaPago,
+            mes_abono: `${mes} ${anio}`,
+            fecha_vencimiento: isDesconocido ? null : fechaVenc,
+            observaciones: this.container.querySelector('#completar-observaciones').value,
+            estado_desconocido: isDesconocido
         };
 
         try {
-            await apiClient.put(`/pagos-socios/${id}`, data);
-            showSuccess('Información de cuota completada');
+            if (id) {
+                await apiClient.put(`/pagos-socios/${id}`, data);
+                showSuccess('Información de cuota actualizada');
+            } else {
+                await apiClient.post('/pagos-socios', data);
+                showSuccess('Registro de cuota creado');
+            }
             this.container.querySelector('#pago-completar-modal').style.display = 'none';
             await this.loadData();
         } catch (error) {
@@ -483,10 +677,15 @@ export class SociosPage {
         });
 
         content.querySelectorAll('.complete-shortcut-btn').forEach(btn => {
-            btn.onclick = () => {
+            btn.onclick = async () => {
                 this.selectedSocio = this.socios.find(s => s.id === parseInt(btn.dataset.id));
-                this.view = 'payments';
-                this.render();
+                try {
+                    const response = await apiClient.get('/pagos-socios', { socio_id: this.selectedSocio.id });
+                    this.payments = response.data;
+                    this.openCompletePagoModal();
+                } catch (error) {
+                    displayApiError(error);
+                }
             };
         });
 
@@ -548,18 +747,18 @@ export class SociosPage {
     renderPayments(content) {
         content.innerHTML = `
             <div class="card mb-4 bg-light">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <h3>Historial de Cuotas Sociales</h3>
-                        <p><strong>Socio:</strong> ${this.selectedSocio.nombre_completo} | <strong>Lugar:</strong> ${this.selectedSocio.lugar_nombre} | <strong>Nº:</strong> ${this.selectedSocio.numero_socio || 'S/N'}</p>
+                <div class="flex justify-between items-start gap-3">
+                    <div style="flex: 1;">
+                        <h3 class="mb-1">Historial de Cuotas Sociales</h3>
+                        <p class="mb-0"><strong>Socio:</strong> ${this.selectedSocio.nombre_completo} | <strong>Lugar:</strong> ${this.selectedSocio.lugar_nombre} | <strong>Nº:</strong> ${this.selectedSocio.numero_socio || 'S/N'}</p>
                     </div>
-                    <div class="text-right">
-                        <div class="card p-2 mb-0" style="background: #fff; border: 1px solid #ddd; display: inline-block;">
+                    <div class="text-right flex flex-col items-end gap-2" style="min-width: fit-content;">
+                        <div class="card p-2 mb-0" style="background: #fff; border: 1px solid #ddd; display: inline-block; white-space: nowrap;">
                             <small class="text-muted d-block">Tarifas Establecidas:</small>
                             <strong>General: $${parseFloat(this.selectedSocio.cuota_social_general).toFixed(2)}</strong> | 
                             <strong>Bonificada: $${parseFloat(this.selectedSocio.cuota_social_descuento).toFixed(2)}</strong>
                         </div>
-                        <button id="back-to-list" class="btn btn-outline-secondary ml-2">Volver al listado</button>
+                        <button id="back-to-list" class="btn btn-sm btn-outline-secondary">Volver al listado</button>
                     </div>
                 </div>
             </div>
@@ -586,7 +785,11 @@ export class SociosPage {
                             
                             // Monto Pagado: from PagoSocio model (monto)
                             // Shown when the payment to the club is completed (fecha_pago exists) or if it's a teacher
-                            const montoPagado = (p.es_profesor || p.fecha_pago) ? '$' + parseFloat(p.monto).toFixed(2) : '-';
+                            let montoPagado = (p.es_profesor || p.fecha_pago) ? '$' + parseFloat(p.monto).toFixed(2) : '-';
+
+                            if (p.estado_desconocido) {
+                                montoPagado = '<span class="badge badge-secondary" title="Relación directa con el club. Se desconoce estado de pago.">DESCONOCIDO</span>';
+                            }
 
                             return `
                                 <tr>
@@ -600,7 +803,7 @@ export class SociosPage {
                                     </td>
                                     <td>
                                         <div class="flex gap-1">
-                                            ${!p.fecha_pago ? `<button class="btn btn-sm btn-info complete-pago-btn" data-id="${p.id}" title="Completar Pago"><i class="fas fa-edit"></i></button>` : ''}
+                                            ${(!p.fecha_pago && !p.estado_desconocido) ? `<button class="btn btn-sm btn-info complete-pago-btn" data-id="${p.id}" title="Completar Pago"><i class="fas fa-edit"></i></button>` : ''}
                                             <button class="btn btn-sm btn-outline-danger delete-pago-btn" data-id="${p.id}" title="Eliminar"><i class="fas fa-trash"></i></button>
                                         </div>
                                     </td>
@@ -733,6 +936,11 @@ export class SociosPage {
         this.container.querySelector('#pago-vencimiento').value = formatDate(suggestedVenc);
         this.container.querySelector('#pago-observaciones').value = "";
         
+        const desconocidoCheck = this.container.querySelector('#pago-desconocido');
+        if (desconocidoCheck) desconocidoCheck.checked = false;
+        if (tipoMontoSelect) tipoMontoSelect.disabled = false;
+        montoInput.readOnly = true;
+
         // Initial check for defaults
         this.checkDuplicatePayment();
         
@@ -749,7 +957,8 @@ export class SociosPage {
             fecha_pago: this.container.querySelector('#pago-fecha').value,
             mes_abono: `${mes} ${anio}`,
             fecha_vencimiento: this.container.querySelector('#pago-vencimiento').value,
-            observaciones: this.container.querySelector('#pago-observaciones').value
+            observaciones: this.container.querySelector('#pago-observaciones').value,
+            estado_desconocido: this.container.querySelector('#pago-desconocido').checked
         };
 
         try {

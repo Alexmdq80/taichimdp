@@ -18,6 +18,19 @@ header {
   flex-direction: column;
 }
 
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
 .logo-title {
   display: flex;
   align-items: center;
@@ -132,4 +145,12 @@ footer {
 
 .gap-3 {
   gap: 1.5rem;
+}
+
+/* Table utilities */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
 }

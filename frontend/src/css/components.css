@@ -434,8 +434,21 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Loading state */
-.loading {
-  opacity: 0.6;
-  pointer-events: none;
+/* Login/Register specialized styles */
+.login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 100px); /* Account for main padding and flex setup */
 }
+
+.login-container {
+  width: 100%;
+  max-width: 450px;
+  padding: 2.5rem !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* Utilities */
+.w-100 { width: 100% !important; }
 .d-none { display: none !important; }

@@ -11,10 +11,22 @@
 <body>
   <div id="app">
     <header>
-      <h1>Sistema de Gestión de Clases</h1>
-      <nav id="navigation">
-        <div id="nav-links"></div>
-      </nav>
+      <div class="header-container">
+        <div class="header-top flex justify-between items-center">
+          <div class="logo-title flex items-center gap-2">
+            <img src="/src/assets/logo.png" alt="Logo" id="header-logo">
+            <h1>Sistema de Gestión de Clases</h1>
+          </div>
+          <div id="auth-actions" style="display: none;">
+            <button id="logout-btn" class="btn btn-outline-secondary btn-sm">
+              <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </button>
+          </div>
+        </div>
+        <nav id="navigation">
+          <div id="nav-links"></div>
+        </nav>
+      </div>
     </header>
     
     <main id="main-content">

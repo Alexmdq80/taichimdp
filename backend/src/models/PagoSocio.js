@@ -12,6 +12,8 @@ export class PagoSocio {
         this.mes_abono = data.mes_abono;
         this.fecha_vencimiento = data.fecha_vencimiento;
         this.observaciones = data.observaciones || null;
+        this.pagado_directo = !!data.pagado_directo;
+        this.estado_desconocido = !!data.estado_desconocido;
         this.usuario_id = data.usuario_id || null;
         this.created_at = data.created_at || null;
         this.updated_at = data.updated_at || null;
@@ -88,8 +90,8 @@ export class PagoSocio {
 
     static async create(data, connection = null, userId = null) {
         const sql = `
-            INSERT INTO PagoSocio (socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones, usuario_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO PagoSocio (socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones, pagado_directo, estado_desconocido, usuario_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const executor = connection || pool;
         const [result] = await executor.execute(sql, [
@@ -99,6 +101,8 @@ export class PagoSocio {
             data.mes_abono,
             data.fecha_vencimiento,
             data.observaciones || null,
+            !!data.pagado_directo,
+            !!data.estado_desconocido,
             userId
         ]);
         
@@ -116,7 +120,8 @@ export class PagoSocio {
 
         const sql = `
             UPDATE PagoSocio 
-            SET monto = ?, fecha_pago = ?, mes_abono = ?, fecha_vencimiento = ?, observaciones = ?
+            SET monto = ?, fecha_pago = ?, mes_abono = ?, fecha_vencimiento = ?, observaciones = ?,
+                pagado_directo = ?, estado_desconocido = ?
             WHERE id = ? AND deleted_at IS NULL
         `;
         
@@ -126,6 +131,8 @@ export class PagoSocio {
             data.mes_abono !== undefined ? data.mes_abono : current.mes_abono,
             data.fecha_vencimiento !== undefined ? data.fecha_vencimiento : current.fecha_vencimiento,
             data.observaciones !== undefined ? data.observaciones : current.observaciones,
+            data.pagado_directo !== undefined ? !!data.pagado_directo : current.pagado_directo,
+            data.estado_desconocido !== undefined ? !!data.estado_desconocido : current.estado_desconocido,
             id
         ]);
 
@@ -184,6 +191,8 @@ export class PagoSocio {
             mes_abono: this.mes_abono,
             fecha_vencimiento: formatDateStr(this.fecha_vencimiento),
             observaciones: this.observaciones,
+            pagado_directo: this.pagado_directo,
+            estado_desconocido: this.estado_desconocido,
             usuario_id: this.usuario_id,
             es_profesor: this.es_profesor,
             nombre_completo: this.nombre_completo,

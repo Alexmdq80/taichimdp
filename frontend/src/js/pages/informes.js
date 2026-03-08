@@ -11,6 +11,7 @@ export class InformesPage {
         this.selectedMonth = today.getMonth() + 1;
         this.selectedYear = today.getFullYear();
         this.selectedLugarId = '';
+        this.reportBasis = 'pago'; // 'pago' | 'mes'
         
         this.lugares = [];
         this.data = [];
@@ -26,6 +27,7 @@ export class InformesPage {
                 <div class="form-row align-items-center">
                     <div class="form-group col-md-3 mb-md-0">
                         <select class="form-control" id="report-type" title="Tipo de Informe">
+                            <option value="balance" ${this.currentReport === 'balance' ? 'selected' : ''}>Balance Mensual (Caja + Rentabilidad)</option>
                             <option value="cuotas" ${this.currentReport === 'cuotas' ? 'selected' : ''}>Resumen Cuotas Pagadas</option>
                             <option value="padron" ${this.currentReport === 'padron' ? 'selected' : ''}>Padrón Detallado de Socios</option>
                             <option value="espacios" ${this.currentReport === 'espacios' ? 'selected' : ''}>Alquiler de Espacios</option>
@@ -44,6 +46,12 @@ export class InformesPage {
                         <select class="form-control" id="report-lugar" title="Sede / Club">
                             <option value="">Todas las Sedes</option>
                             <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group col-md-2 mb-md-0" id="basis-container" style="display: ${this.currentReport === 'balance' ? 'block' : 'none'}">
+                        <select class="form-control" id="report-basis" title="Criterio de fecha">
+                            <option value="pago" ${this.reportBasis === 'pago' ? 'selected' : ''}>Fecha Pago (Caja)</option>
+                            <option value="mes" ${this.reportBasis === 'mes' ? 'selected' : ''}>Mes Devengado</option>
                         </select>
                     </div>
                     <div class="form-group col-md-2 mb-md-0">
@@ -89,6 +97,10 @@ export class InformesPage {
     attachEvents() {
         this.container.querySelector('#report-type').onchange = (e) => {
             this.currentReport = e.target.value;
+            const basisContainer = this.container.querySelector('#basis-container');
+            if (basisContainer) {
+                basisContainer.style.display = this.currentReport === 'balance' ? 'block' : 'none';
+            }
             this.loadReport();
         };
         this.container.querySelector('#report-month').onchange = (e) => {
@@ -103,6 +115,15 @@ export class InformesPage {
             this.selectedLugarId = e.target.value;
             this.loadReport();
         };
+        
+        const basisSelect = this.container.querySelector('#report-basis');
+        if (basisSelect) {
+            basisSelect.onchange = (e) => {
+                this.reportBasis = e.target.value;
+                this.loadReport();
+            };
+        }
+
         this.container.querySelector('#print-report-btn').onclick = () => window.print();
     }
 
@@ -115,10 +136,13 @@ export class InformesPage {
             const params = {
                 mes: this.selectedMonth,
                 anio: this.selectedYear,
-                lugar_id: this.selectedLugarId
+                lugar_id: this.selectedLugarId,
+                criterio: this.reportBasis
             };
 
-            if (this.currentReport === 'cuotas') {
+            if (this.currentReport === 'balance') {
+                endpoint = '/informes/balance-mensual';
+            } else if (this.currentReport === 'cuotas') {
                 endpoint = '/informes/cuotas-sociales';
             } else if (this.currentReport === 'padron') {
                 endpoint = '/informes/padron-socios-pagos';
@@ -160,12 +184,14 @@ export class InformesPage {
     }
 
     renderReportData(content) {
-        if (this.data.length === 0) {
+        if (!this.data || (Array.isArray(this.data) && this.data.length === 0 && this.currentReport !== 'balance')) {
             content.innerHTML = '<div class="alert alert-info">No hay datos para los criterios seleccionados.</div>';
             return;
         }
 
-        if (this.currentReport === 'cuotas') {
+        if (this.currentReport === 'balance') {
+            this.renderBalanceReport(content);
+        } else if (this.currentReport === 'cuotas') {
             this.renderCuotasReport(content);
         } else if (this.currentReport === 'padron') {
             this.renderPadronReport(content);
@@ -174,6 +200,88 @@ export class InformesPage {
         } else {
             this.renderEspaciosReport(content);
         }
+    }
+
+    renderBalanceReport(content) {
+        const d = this.data;
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const sedeNombre = this.selectedLugarId ? this.lugares.find(l => l.id == this.selectedLugarId)?.nombre : 'Todos los lugares de clases';
+        const criterioLabel = this.reportBasis === 'mes' ? 'Mes Devengado (Servicio)' : 'Fecha de Pago (Caja Real)';
+
+        content.innerHTML = `
+            <div class="report-paper p-4 bg-white border">
+                ${this.renderReportHeader('Balance Mensual de Caja', `Sede: ${sedeNombre} - Periodo: ${monthNames[this.selectedMonth - 1]} ${this.selectedYear} (${criterioLabel})`)}
+
+                <div class="grid grid-2 gap-4 mb-5">
+                    <div class="card p-4">
+                        <h3 class="border-bottom pb-2 text-success">Ingresos</h3>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Ingresos por Abonos (Clases):</span>
+                            <strong>$${d.ingresosAbonos.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Cuotas Sociales Recibidas:</span>
+                            <strong>$${d.ingresosCuotas.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Otros Ingresos Extra:</span>
+                            <strong>$${d.otrosIngresos.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between mt-3 pt-2" style="font-size: 1.25rem;">
+                            <span>TOTAL INGRESOS:</span>
+                            <strong class="text-success">$${d.totalIngresos.toFixed(2)}</strong>
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="border-bottom pb-2 text-danger">Egresos / Gastos</h3>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Pago Alquiler Salón (Club):</span>
+                            <strong>$${d.egresosAlquiler.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Pago Cuotas Sociales (Club):</span>
+                            <strong>$${d.egresosCuotas.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between py-2 border-bottom">
+                            <span>Otros Egresos Extra:</span>
+                            <strong>$${d.otrosEgresos.toFixed(2)}</strong>
+                        </div>
+                        <div class="flex justify-between mt-3 pt-2" style="font-size: 1.25rem;">
+                            <span>TOTAL EGRESOS:</span>
+                            <strong class="text-danger">$${d.totalEgresos.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rentabilidad Section -->
+                <div class="card p-5 bg-light mb-5 border-primary shadow-sm">
+                    <h2 class="text-center mb-5" style="color: var(--primary-color); font-weight: 700;">Resultado del Mes</h2>
+                    <div class="grid grid-3 gap-4 text-center">
+                        <div class="p-3">
+                            <p class="text-muted mb-2 font-weight-bold text-uppercase small">Balance Neto (Ganancia)</p>
+                            <h2 class="${d.balanceNeto >= 0 ? 'text-success' : 'text-danger'}" style="font-size: 2.75rem; font-weight: 800;">$${d.balanceNeto.toFixed(2)}</h2>
+                        </div>
+                        <div class="p-3 border-left border-right">
+                            <p class="text-muted mb-2 font-weight-bold text-uppercase small">Total Horas Clase</p>
+                            <h2 style="font-size: 2.75rem; font-weight: 800;">${d.totalHoras.toFixed(1)} <small style="font-size: 1rem;">hs</small></h2>
+                        </div>
+                        <div class="p-3">
+                            <p class="text-muted mb-2 font-weight-bold text-uppercase small">Ganancia Neta por Hora</p>
+                            <h2 class="text-primary" style="font-size: 2.75rem; font-weight: 800;">$${d.gananciaPorHora.toFixed(2)}</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle"></i> <strong>Nota:</strong> Este balance incluye todos los movimientos de caja registrados y el costo de alquiler de salones. Las horas se calculan en base a la duración programada de las clases impartidas en el periodo.
+                </div>
+
+                <div class="mt-5 text-right small text-muted">
+                    Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
+                </div>
+            </div>
+        `;
     }
 
     renderConsolidadoReport(content) {
@@ -187,7 +295,14 @@ export class InformesPage {
 
         content.innerHTML = `
             <div class="report-paper p-4 bg-white border">
-                ${this.renderReportHeader('Planilla de Liquidación Mensual', `Institución: ${sedeNombre} - Periodo: ${monthNames[this.selectedMonth - 1]} ${this.selectedYear}`)}
+                <div class="report-header-print mb-5 text-center">
+                    <div class="flex flex-col items-center gap-2 border-bottom pb-4">
+                        <img src="/src/assets/logo.png" alt="Logo" class="report-logo mb-2" style="height: 100px; width: auto;" onerror="this.style.display='none'">
+                        <h1 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 0;">Planilla de Liquidación Mensual</h1>
+                        <h2 class="text-primary" style="font-size: 1.75rem; font-weight: 700; margin-top: 0.5rem;">${sedeNombre}</h2>
+                        <h3 class="text-muted" style="font-size: 1.5rem; font-weight: 600;">Periodo: ${monthNames[this.selectedMonth - 1]} ${this.selectedYear}</h3>
+                    </div>
+                </div>
 
                 <div class="mb-5">
                     <h3 class="border-bottom pb-2">1. Detalle de Cuotas Sociales Recaudadas</h3>
@@ -230,15 +345,16 @@ export class InformesPage {
                         </thead>
                         <tbody>
                             ${alquileres.map(a => {
-                                // Separar año, mes, día manualmente para evitar "Invalid Date"
-                                const [year, month, day] = a.fecha.split('-');
+                                // Convertir a string YYYY-MM-DD primero para asegurar consistencia
+                                const dateStr = formatDate(a.fecha);
+                                const [year, month, day] = dateStr.split('-');
                                 const dateObj = new Date(year, month - 1, day);
                                 const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
                                 const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
                                 
                                 return `
                                 <tr>
-                                    <td>${capitalizedDay} ${formatDate(a.fecha)} <small class="text-muted">(${a.hora.substring(0, 5)} hs)</small></td>
+                                    <td>${capitalizedDay} ${dateStr} <small class="text-muted">(${a.hora.substring(0, 5)} hs)</small></td>
                                     <td>${a.actividad_nombre}</td>
                                     <td class="text-right">$${parseFloat(a.monto).toFixed(2)}</td>
                                 </tr>
@@ -274,17 +390,8 @@ export class InformesPage {
                     </div>
                 </div>
 
-                <div class="mt-5 flex justify-between" style="padding-top: 3rem;">
-                    <div style="border-top: 1px solid black; width: 200px; text-align: center;">
-                        <small>Firma Responsable</small>
-                    </div>
-                    <div style="border-top: 1px solid black; width: 200px; text-align: center;">
-                        <small>Recibido por el Club</small>
-                    </div>
-                </div>
-
                 <div class="mt-5 text-right small text-muted">
-                    Documento generado por el Sistema de Gestión el: ${new Date().toLocaleString()}
+                    Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
                 </div>
             </div>
         `;
@@ -329,7 +436,7 @@ export class InformesPage {
                                     <td><small>${item.direccion || '-'}</small></td>
                                     ${!isSedeFiltered ? `<td>${item.sede_nombre}</td>` : ''}
                                     <td><span class="badge badge-light">${item.categoria_cuota}</span></td>
-                                    <td class="text-right">$${parseFloat(item.monto).toFixed(2)}</td>
+                                    <td class="text-right">${item.monto !== null && item.monto !== undefined ? '$' + parseFloat(item.monto).toFixed(2) : '-'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -382,7 +489,7 @@ export class InformesPage {
                     </tfoot>
                 </table>
                 <div class="mt-5 text-right small text-muted">
-                    Generado el: ${new Date().toLocaleString()}
+                    Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
                 </div>
             </div>
         `;
@@ -412,7 +519,8 @@ export class InformesPage {
                     </thead>
                     <tbody>
                         ${this.data.map(item => {
-                            const [year, month, day] = item.fecha.split('-');
+                            const dateStr = formatDate(item.fecha);
+                            const [year, month, day] = dateStr.split('-');
                             const dateObj = new Date(year, month - 1, day);
                             const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
                             const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
@@ -420,7 +528,7 @@ export class InformesPage {
                             return `
                             <tr>
                                 ${!isSedeFiltered ? `<td>${item.lugar_nombre}</td>` : ''}
-                                <td>${capitalizedDay} ${formatDate(item.fecha)} <small>(${item.hora.substring(0, 5)} hs)</small></td>
+                                <td>${capitalizedDay} ${dateStr} <small>(${item.hora.substring(0, 5)} hs)</small></td>
                                 <td>${item.actividad_nombre}</td>
                                 <td class="text-right font-weight-bold">$${parseFloat(item.monto_pagado || 0).toFixed(2)}</td>
                                 <td>${formatDate(item.fecha_pago)}</td>
@@ -436,7 +544,7 @@ export class InformesPage {
                     </tfoot>
                 </table>
                 <div class="mt-5 text-right small text-muted">
-                    Generado el: ${new Date().toLocaleString()}
+                    Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
                 </div>
             </div>
         `;

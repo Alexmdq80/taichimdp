@@ -24,10 +24,12 @@ router.get('/', asyncHandler(async (req, res) => {
  * POST /api/pagos-socios
  */
 router.post('/', asyncHandler(async (req, res) => {
-    const { socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones } = req.body;
+    const { socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones, pagado_directo, estado_desconocido } = req.body;
     const userId = req.user.userId;
 
-    if (!socio_id || !fecha_pago || !mes_abono || !fecha_vencimiento) {
+    // Validation: socio_id and mes_abono are always required.
+    // fecha_pago and fecha_vencimiento are only required if NOT "desconocido"
+    if (!socio_id || !mes_abono || (!estado_desconocido && (!fecha_pago || !fecha_vencimiento))) {
         throw new AppError('Faltan campos obligatorios', 400);
     }
 
@@ -43,12 +45,17 @@ router.post('/', asyncHandler(async (req, res) => {
     }
     
     const practicante = await Practicante.findById(socio.practicante_id);
-    if (!practicante || !practicante.es_profesor) {
+    if (!practicante) throw new AppError('Practicante no encontrado', 404);
+
+    // If it's a student, only allow direct POST if it's a special status (direct/unknown)
+    if (!practicante.es_profesor && !req.body.pagado_directo && !req.body.estado_desconocido) {
         throw new AppError('Los cobros a alumnos deben registrarse desde la sección de Practicantes para impactar en caja.', 403);
     }
 
     const pago = await PagoSocio.create({
-        socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones
+        socio_id, monto, fecha_pago, mes_abono, fecha_vencimiento, observaciones,
+        pagado_directo: req.body.pagado_directo,
+        estado_desconocido: req.body.estado_desconocido
     }, null, userId);
 
     res.status(201).json({ data: pago.toJSON() });

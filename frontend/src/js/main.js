@@ -36,6 +36,20 @@ function updateNavigation() {
   navLinksDiv.innerHTML = '';
 
   if (isAuthenticated()) {
+    const authActions = document.getElementById('auth-actions');
+    if (authActions) {
+      authActions.style.display = 'block';
+      const logoutBtn = document.getElementById('logout-btn');
+      if (logoutBtn) {
+        logoutBtn.onclick = (e) => {
+          e.preventDefault();
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
+        };
+      }
+    }
+
     const links = [
       { href: '/practicantes', text: 'Practicantes' },
       { href: '/socios', text: 'Socios', checkAlerts: true },
@@ -67,18 +81,9 @@ function updateNavigation() {
         checkTeacherAlerts(a);
       }
     });
-
-    // Logout link
-    const logoutLink = document.createElement('a');
-    logoutLink.href = '#';
-    logoutLink.textContent = 'Cerrar Sesión';
-    logoutLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      navigate('/login');
-    });
-    navLinksDiv.appendChild(logoutLink);
+  } else {
+    const authActions = document.getElementById('auth-actions');
+    if (authActions) authActions.style.display = 'none';
   }
 }
 
