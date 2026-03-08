@@ -1,4 +1,4 @@
-import { formatDate } from '../utils/formatting.js';
+import { formatDateWithDay } from '../utils/formatting.js';
 
 export class ClaseList {
   constructor(container, options = {}) {
@@ -51,7 +51,7 @@ export class ClaseList {
             ${this.clases.length === 0 ? '<tr><td colspan="9" class="text-center">No hay clases registradas en este periodo</td></tr>' : ''}
             ${this.clases.map(c => `
               <tr class="${c.estado === 'cancelada' || c.estado === 'suspendida' || c.estado === 'cerrada' ? 'table-light text-muted' : ''}">
-                <td><strong>${formatDate(c.fecha)}</strong></td>
+                <td><strong>${formatDateWithDay(c.fecha)}</strong></td>
                 <td>${c.hora.substring(0, 5)} - ${c.hora_fin.substring(0, 5)}</td>
                 <td><small>${c.profesor_nombre || '<span class="text-muted">No asignado</span>'}</small></td>
                 <td>

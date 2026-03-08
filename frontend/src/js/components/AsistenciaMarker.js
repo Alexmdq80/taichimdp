@@ -1,6 +1,6 @@
 import { apiClient } from '../api/client.js';
 import { displayApiError, showSuccess } from '../utils/errors.js';
-import { formatTime } from '../utils/formatting.js';
+import { formatTime, formatDateWithDay } from '../utils/formatting.js';
 
 export class AsistenciaMarker {
     constructor(container, options = {}) {
@@ -79,7 +79,7 @@ export class AsistenciaMarker {
                             <div class="p-3 bg-light border rounded">
                                 <p><strong>Actividad:</strong> ${c.actividad_nombre}</p>
                                 <p><strong>Lugar:</strong> ${c.lugar_nombre}</p>
-                                <p><strong>Fecha:</strong> ${c.fecha}</p>
+                                <p><strong>Fecha:</strong> ${formatDateWithDay(c.fecha)}</p>
                                 <p><strong>Horario:</strong> ${formatTime(c.hora)} - ${formatTime(c.hora_fin)}</p>
                                 
                                 <div class="form-group mt-3">

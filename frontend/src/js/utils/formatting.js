@@ -50,6 +50,34 @@ export function formatDateReadable(date) {
 }
 
 /**
+ * Format date to readable format with day name (e.g., Lunes 08/03/2026)
+ * @param {Date|string} date - Date to format
+ * @returns {string} - Formatted date with day name
+ */
+export function formatDateWithDay(date) {
+  if (!date) return '';
+  
+  let d;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number);
+    d = new Date(year, month - 1, day);
+  } else {
+    d = date instanceof Date ? date : new Date(date);
+  }
+
+  if (isNaN(d.getTime())) return '';
+
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const dayName = dayNames[d.getDay()];
+  
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  
+  return `${dayName} ${day}/${month}/${year}`;
+}
+
+/**
  * Format currency
  * @param {number|string} amount - Amount to format
  * @param {string} currency - Currency code (default: 'USD')

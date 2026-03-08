@@ -455,7 +455,9 @@ export class InformesPage {
                 </div>
                 <div class="mt-4 flex justify-between small text-muted">
                     <span>Total de registros: ${this.data.length}</span>
-                    <span>Generado el: ${new Date().toLocaleString()}</span>
+                    <span class="text-right">
+                        Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
+                    </span>
                 </div>
             </div>
         `;
