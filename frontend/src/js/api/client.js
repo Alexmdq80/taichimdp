@@ -45,7 +45,9 @@ export const makeRequest = async (endpoint, method = 'GET', data = null, authent
     }
 
     if (!response.ok) {
-        const error = new Error(responseData.message || 'Something went wrong');
+        // El backend devuelve errores en el campo 'error'
+        const errorMsg = responseData.error || responseData.message || 'Something went wrong';
+        const error = new Error(errorMsg);
         error.details = responseData.details || null;
         error.status = response.status;
         throw error;
@@ -66,16 +68,23 @@ export const practicanteApi = {
     create: (data) => makeRequest('/practicantes', 'POST', data, true),
     update: (id, data) => makeRequest(`/practicantes/${id}`, 'PUT', data, true),
     delete: (id) => makeRequest(`/practicantes/${id}`, 'DELETE', null, true),
-    };
+};
 
-    // Generic API client for other resources
-    export const apiClient = {
-    get: (endpoint, params = {}) => {
-        const queryParams = new URLSearchParams(params).toString();
-        const url = queryParams ? `${endpoint}?${queryParams}` : endpoint;
-        return makeRequest(url, 'GET', null, true);
-    },
-    post: (endpoint, data) => makeRequest(endpoint, 'POST', data, true),
+// Generic API client for all resources
+export const apiClient = {
+get: (endpoint, params = {}) => {
+    // Limpiar parámetros indefinidos o nulos
+    const cleanParams = Object.keys(params).reduce((acc, key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+            acc[key] = params[key];
+        }
+        return acc;
+    }, {});
+
+    const queryParams = new URLSearchParams(cleanParams).toString();
+    const url = queryParams ? `${endpoint}?${queryParams}` : endpoint;
+    return makeRequest(url, 'GET', null, true);
+},    post: (endpoint, data) => makeRequest(endpoint, 'POST', data, true),
     put: (endpoint, data) => makeRequest(endpoint, 'PUT', data, true),
     delete: (endpoint) => makeRequest(endpoint, 'DELETE', null, true)
-    };
+};

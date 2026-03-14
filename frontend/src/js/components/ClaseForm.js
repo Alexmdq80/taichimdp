@@ -47,6 +47,7 @@ export class ClaseForm {
   async render() {
     await this.loadInitialData();
     const isEdit = !!this.options.clase;
+    const isClosed = isEdit && this.options.clase.estado === 'cerrada';
     const today = new Date().toISOString().split('T')[0];
     
     const c = this.options.clase || {
@@ -75,18 +76,23 @@ export class ClaseForm {
           <h3>${isEdit ? 'Editar Sesión de Clase' : 'Nueva Sesión de Clase (Manual)'}</h3>
         </div>
         <div class="card-body">
+          ${isClosed ? `
+            <div class="alert alert-dark mb-4">
+                <i class="fas fa-lock"></i> <strong>Clase Cerrada:</strong> No se pueden modificar los detalles de una clase que ya ha sido cerrada.
+            </div>
+          ` : ''}
           <form id="clase-form">
             <div class="form-row">
               <div class="form-group col-md-6">
                 <label for="tipo">Tipo de Clase</label>
-                <select class="form-control" id="tipo" required>
+                <select class="form-control" id="tipo" required ${isClosed ? 'disabled' : ''}>
                   <option value="grupal" ${c.tipo === 'grupal' ? 'selected' : ''}>Grupal (Horario fijo)</option>
                   <option value="flexible" ${c.tipo === 'flexible' ? 'selected' : ''}>Particular / Compartida (Horario pautado)</option>
                 </select>
               </div>
               <div class="form-group col-md-6">
                 <label for="profesor_id">Profesor Responsable</label>
-                <select class="form-control" id="profesor_id">
+                <select class="form-control" id="profesor_id" ${isClosed ? 'disabled' : ''}>
                   <option value="">Seleccione un profesor</option>
                   ${this.profesores.map(p => `<option value="${p.id}" ${c.profesor_id == p.id ? 'selected' : ''}>${p.nombre_completo}</option>`).join('')}
                 </select>
@@ -96,14 +102,14 @@ export class ClaseForm {
             <div class="form-row">
               <div class="form-group col-md-6">
                 <label for="actividad_id">Actividad</label>
-                <select class="form-control" id="actividad_id" required>
+                <select class="form-control" id="actividad_id" required ${isClosed ? 'disabled' : ''}>
                   <option value="">Seleccione una actividad</option>
                   ${this.actividades.map(a => `<option value="${a.id}" ${c.actividad_id == a.id ? 'selected' : ''}>${a.nombre}</option>`).join('')}
                 </select>
               </div>
               <div class="form-group col-md-6">
                 <label for="lugar_id">Lugar / Sede</label>
-                <select class="form-control" id="lugar_id" required>
+                <select class="form-control" id="lugar_id" required ${isClosed ? 'disabled' : ''}>
                   <option value="">Seleccione un lugar</option>
                   ${filteredLugares.map(l => `<option value="${l.id}" ${c.lugar_id == l.id ? 'selected' : ''}>${l.nombre}${l.parent_nombre ? ` (${l.parent_nombre})` : ''}</option>`).join('')}
                 </select>
@@ -113,15 +119,15 @@ export class ClaseForm {
             <div class="form-row">
               <div class="form-group col-md-4">
                 <label for="fecha">Fecha</label>
-                <input type="date" class="form-control" id="fecha" value="${c.fecha}" required>
+                <input type="date" class="form-control" id="fecha" value="${c.fecha}" required ${isClosed ? 'disabled' : ''}>
               </div>
               <div class="form-group col-md-4">
                 <label for="hora">Hora Inicio</label>
-                <input type="time" class="form-control" id="hora" value="${c.hora.substring(0, 5)}" required>
+                <input type="time" class="form-control" id="hora" value="${c.hora.substring(0, 5)}" required ${isClosed ? 'disabled' : ''}>
               </div>
               <div class="form-group col-md-4">
                 <label for="hora_fin">Hora Fin</label>
-                <input type="time" class="form-control" id="hora_fin" value="${c.hora_fin.substring(0, 5)}" required>
+                <input type="time" class="form-control" id="hora_fin" value="${c.hora_fin.substring(0, 5)}" required ${isClosed ? 'disabled' : ''}>
               </div>
             </div>
 
@@ -134,7 +140,7 @@ export class ClaseForm {
                         const isChecked = this.currentAttendees && this.currentAttendees.includes(p.id);
                         return `
                         <div class="form-check">
-                            <input class="form-check-input student-reservation" type="checkbox" value="${p.id}" id="p-${p.id}" ${isChecked ? 'checked' : ''}>
+                            <input class="form-check-input student-reservation" type="checkbox" value="${p.id}" id="p-${p.id}" ${isChecked ? 'checked' : ''} ${isClosed ? 'disabled' : ''}>
                             <label class="form-check-label" for="p-${p.id}">${p.nombre_completo}</label>
                         </div>
                     `}).join('')}
@@ -144,12 +150,12 @@ export class ClaseForm {
 
             <div class="form-group mt-3">
               <label for="observaciones">Descripción / Notas</label>
-              <textarea class="form-control" id="observaciones" rows="2" placeholder="Opcional">${c.observaciones || c.descripcion || ''}</textarea>
+              <textarea class="form-control" id="observaciones" rows="2" placeholder="Opcional" ${isClosed ? 'disabled' : ''}>${c.observaciones || c.descripcion || ''}</textarea>
             </div>
 
             <div class="form-actions mt-4">
-              <button type="submit" class="btn btn-primary">Guardar Clase</button>
-              <button type="button" class="btn btn-secondary" id="cancel-clase-btn">Cancelar</button>
+              ${!isClosed ? '<button type="submit" class="btn btn-primary">Guardar Clase</button>' : ''}
+              <button type="button" class="btn btn-secondary" id="cancel-clase-btn">${isClosed ? 'Volver' : 'Cancelar'}</button>
             </div>
           </form>
         </div>
@@ -193,6 +199,11 @@ export class ClaseForm {
         observaciones: this.container.querySelector('#observaciones').value,
         practicantes_reservados: reservedStudents
       };
+
+      if (formData.hora >= formData.hora_fin) {
+        showError('La hora de inicio debe ser anterior a la hora de finalización.');
+        return;
+      }
 
       try {
         if (this.options.clase) {

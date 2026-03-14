@@ -375,6 +375,8 @@ const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
 
     async loadData() {
         const content = this.container.querySelector('#costos-content');
+        if (!content) return;
+
         try {
             // Parámetros para pagos: si filtramos por mes de abono, usamos mes/año. Si no, rango de fechas.
             const pagosParams = { 
@@ -383,7 +385,7 @@ const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
 
             if (this.filterByMesAbono) {
                 if (this.selectedMonth !== 'all') {
-                    pagosParams.mes = this.selectedMonth + 1; // Backend espera 1-12
+                    pagosParams.mes = parseInt(this.selectedMonth, 10) + 1; // Backend espera 1-12
                 }
                 pagosParams.anio = this.selectedYear;
             } else {
@@ -391,8 +393,16 @@ const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
                 pagosParams.fecha_fin = this.filters.fecha_fin;
             }
 
+            // Para las clases en el flujo de caja, queremos:
+            // 1. Clases que ocurrieron en el rango (para ver lo "esperado")
+            // 2. Clases que se PAGARON en el rango (aunque hayan ocurrido antes)
+            const clasesFilters = { 
+                ...this.filters,
+                include_paid_in_range: true // Indicación para el backend (si lo soporta) o para coherencia
+            };
+
             const results = await Promise.allSettled([
-                apiClient.get('/asistencia/clases', this.filters),
+                apiClient.get('/asistencia/clases', clasesFilters),
                 apiClient.get('/caja', this.filters),
                 apiClient.get('/categorias-caja'),
                 apiClient.get('/pagos', pagosParams)
@@ -401,17 +411,18 @@ const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
             this.clases = results[0].status === 'fulfilled' ? results[0].value.data : [];
             this.movimientos = results[1].status === 'fulfilled' ? results[1].value.data : [];
             this.categorias = results[2].status === 'fulfilled' ? (results[2].value.data || []) : [];
-            this.pagosAbonos = results[3].status === 'fulfilled' ? results[3].value.data : [];
+            this.pagosAbonos = results[3].status === 'fulfilled' ? (results[3].value.data || []) : [];
             
-            if (results.some(r => r.status === 'rejected')) {
-                console.error('Some requests failed:', results.filter(r => r.status === 'rejected'));
-            }
+            // Log errors if any
+            results.forEach((r, i) => {
+                if (r.status === 'rejected') console.error(`Request ${i} failed:`, r.reason);
+            });
 
             this.renderList(content);
             this.renderSummary();
         } catch (error) {
             console.error('Error loading data:', error);
-            displayApiError(error, content);
+            displayApiError(error);
         }
     }
 
@@ -611,7 +622,9 @@ const chargeSalonCheckbox = this.container.querySelector('#charge-salon-cost');
                                 const isSuspended = c.estado === 'suspendida';
                                 
                                 let estadoBadge = '';
-                                if (c.pago_espacio_realizado) {
+                                if (expected === 0 && (isCancelled || isSuspended)) {
+                                    estadoBadge = `<span class="badge badge-secondary">${c.estado.toUpperCase()}</span>`;
+                                } else if (c.pago_espacio_realizado) {
                                     estadoBadge = `<span class="badge badge-success" title="Pagado el ${formatDateDashes(c.fecha_pago_espacio)}">PAGADA</span>`;
                                 } else {
                                     estadoBadge = '<span class="badge badge-warning">PENDIENTE</span>';

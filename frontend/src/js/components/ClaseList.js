@@ -6,7 +6,8 @@ export class ClaseList {
     this.options = {
       onSelect: options.onSelect || (() => {}),
       onDelete: options.onDelete || (() => {}),
-      onCloseClase: options.onCloseClase || (() => {})
+      onCloseClase: options.onCloseClase || (() => {}),
+      onEdit: options.onEdit || (() => {})
     };
     this.clases = [];
   }
@@ -65,6 +66,11 @@ export class ClaseList {
                   <span class="badge ${statusBadges[c.estado] || 'badge-secondary'}">
                     ${c.estado.charAt(0).toUpperCase() + c.estado.slice(1)}
                   </span>
+                  ${c.pago_espacio_realizado ? `
+                    <span class="badge badge-success ml-1" title="Costo de espacio pagado">
+                      <i class="fas fa-check-circle"></i> Pagada
+                    </span>
+                  ` : ''}
                 </td>
                 <td>
                   ${c.estado === 'cancelada' || c.estado === 'suspendida' ? '-' : `
@@ -75,17 +81,24 @@ export class ClaseList {
                 </td>
                 <td>
                   ${c.estado !== 'cerrada' ? `
-                    <button class="btn ${c.estado === 'programada' ? 'btn-primary' : 'btn-secondary'} btn-sm attendance-btn" data-id="${c.id}">
-                      ${c.estado === 'programada' ? 'Tomar Asistencia' : 'Gestionar'}
-                    </button>
-                    ${c.estado === 'realizada' ? `
-                      <button class="btn btn-dark btn-sm close-btn" data-id="${c.id}">
-                        Cerrar
+                    <div class="d-flex flex-column gap-1">
+                      <button class="btn ${c.estado === 'programada' ? 'btn-primary' : 'btn-secondary'} btn-sm attendance-btn" data-id="${c.id}">
+                        ${c.estado === 'programada' ? 'Tomar Asistencia' : 'Gestionar'}
                       </button>
-                    ` : ''}
-                    <button class="btn btn-danger btn-sm delete-btn" data-id="${c.id}">
-                      Eliminar
-                    </button>
+                      <button class="btn btn-outline-primary btn-sm edit-btn" data-id="${c.id}">
+                        <i class="fas fa-edit"></i> Editar
+                      </button>
+                      ${c.estado === 'realizada' ? `
+                        <button class="btn btn-dark btn-sm close-btn" data-id="${c.id}">
+                          Cerrar
+                        </button>
+                      ` : ''}
+                      ${!c.pago_espacio_realizado ? `
+                        <button class="btn btn-danger btn-sm delete-btn" data-id="${c.id}">
+                          Eliminar
+                        </button>
+                      ` : ''}
+                    </div>
                   ` : `
                     <button class="btn btn-outline-secondary btn-sm attendance-btn" data-id="${c.id}">
                       Ver Detalles
@@ -110,6 +123,14 @@ export class ClaseList {
         this.options.onSelect(clase);
       });
     });
+
+    this.container.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = parseInt(e.target.closest('.edit-btn').getAttribute('data-id'), 10);
+          const clase = this.clases.find(c => c.id === id);
+          this.options.onEdit(clase);
+        });
+      });
 
     this.container.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {

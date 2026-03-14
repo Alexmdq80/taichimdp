@@ -127,6 +127,11 @@ export class AsistenciaPage {
             } catch (error) {
               displayApiError(error);
             }
+          },
+          onEdit: (clase) => {
+            this.selectedClase = clase;
+            this.currentView = 'form';
+            this.renderView();
           }
         });
         list.setClases(response.data);
@@ -139,6 +144,10 @@ export class AsistenciaPage {
         clase: this.selectedClase,
         onClose: () => {
           this.currentView = 'list';
+          this.renderView();
+        },
+        onEdit: () => {
+          this.currentView = 'form';
           this.renderView();
         }
       });

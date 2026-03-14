@@ -93,6 +93,8 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
         const hasActualChanges = 
             (data.hasOwnProperty('estado') && data.estado !== clase.estado) ||
             (data.hasOwnProperty('tipo') && data.tipo !== clase.tipo) ||
+            (data.hasOwnProperty('actividad_id') && data.actividad_id != clase.actividad_id) ||
+            (data.hasOwnProperty('lugar_id') && data.lugar_id != clase.lugar_id) ||
             (data.hasOwnProperty('fecha') && data.fecha !== (clase.fecha instanceof Date ? clase.fecha.toISOString().split('T')[0] : clase.fecha)) ||
             (data.hasOwnProperty('hora') && data.hora.substring(0, 5) !== clase.hora.substring(0, 5)) ||
             (data.hasOwnProperty('hora_fin') && data.hora_fin.substring(0, 5) !== clase.hora_fin.substring(0, 5)) ||
@@ -164,6 +166,8 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
     const updatedClase = await Clase.update(id, {
         tipo: data.tipo || clase.tipo,
         estado: data.estado || clase.estado,
+        actividad_id: data.actividad_id || clase.actividad_id,
+        lugar_id: data.lugar_id || clase.lugar_id,
         motivo_cancelacion: data.motivo_cancelacion !== undefined ? data.motivo_cancelacion : clase.motivo_cancelacion,
         observaciones: data.observaciones !== undefined ? data.observaciones : clase.observaciones,
         fecha: cleanFecha,
@@ -268,7 +272,8 @@ router.get('/clases', asyncHandler(async (req, res) => {
         fecha_fin: req.query.fecha_fin,
         actividad_id: req.query.actividad_id,
         lugar_id: req.query.lugar_id,
-        tipo: req.query.tipo
+        tipo: req.query.tipo,
+        include_paid_in_range: req.query.include_paid_in_range === 'true'
     };
     const clases = await Clase.findAll(filters);
     res.json({ data: clases.map(c => c.toJSON()) });
@@ -324,8 +329,22 @@ router.post('/clases', asyncHandler(async (req, res) => {
  */
 router.delete('/clases/:id', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
+    
+    // Check if class exists and its payment status
+    const clase = await Clase.findById(id);
+    if (!clase) throw new AppError('Clase no encontrada', 404);
+
+    if (clase.pago_espacio_realizado) {
+        throw new AppError('No se puede eliminar una clase que ya ha sido marcada como pagada. Primero debe desmarcar el pago del espacio.', 400);
+    }
+
+    if (clase.estado === 'cerrada') {
+        throw new AppError('No se puede eliminar una clase que ya ha sido cerrada.', 400);
+    }
+
     const deleted = await Clase.delete(id);
-    if (!deleted) throw new AppError('Clase no encontrada', 404);
+    if (!deleted) throw new AppError('Error al intentar eliminar la clase', 500);
+    
     res.json({ message: 'Clase eliminada con éxito', data: { id } });
 }));
 

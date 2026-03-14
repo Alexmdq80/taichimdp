@@ -48,14 +48,26 @@ export class Clase {
         `;
         const params = [];
 
-        if (filters.fecha_inicio && filters.fecha_inicio !== '') {
-            sql += ' AND c.fecha >= ?';
-            params.push(filters.fecha_inicio);
+        if (filters.fecha_inicio && filters.fecha_inicio !== '' && filters.fecha_fin && filters.fecha_fin !== '') {
+            if (filters.include_paid_in_range) {
+                // Return class if either session date OR payment date is in range
+                sql += ' AND ((c.fecha >= ? AND c.fecha <= ?) OR (c.fecha_pago_espacio >= ? AND c.fecha_pago_espacio <= ?))';
+                params.push(filters.fecha_inicio, filters.fecha_fin, filters.fecha_inicio, filters.fecha_fin);
+            } else {
+                sql += ' AND c.fecha >= ? AND c.fecha <= ?';
+                params.push(filters.fecha_inicio, filters.fecha_fin);
+            }
+        } else {
+            if (filters.fecha_inicio && filters.fecha_inicio !== '') {
+                sql += ' AND c.fecha >= ?';
+                params.push(filters.fecha_inicio);
+            }
+            if (filters.fecha_fin && filters.fecha_fin !== '') {
+                sql += ' AND c.fecha <= ?';
+                params.push(filters.fecha_fin);
+            }
         }
-        if (filters.fecha_fin && filters.fecha_fin !== '') {
-            sql += ' AND c.fecha <= ?';
-            params.push(filters.fecha_fin);
-        }
+        
         if (filters.actividad_id && filters.actividad_id !== '') {
             sql += ' AND c.actividad_id = ?';
             params.push(filters.actividad_id);
@@ -83,7 +95,7 @@ export class Clase {
         const sql = `
             SELECT c.*, a.nombre as actividad_nombre, l.nombre as lugar_nombre, 
                    p.nombre_completo as profesor_nombre,
-                   l.costo_tarifa, l.tipo_tarifa,
+                   l.costo_tarifa, l.tipo_tarifa, l.parent_id as lugar_parent_id,
                    (SELECT COUNT(*) FROM Asistencia WHERE clase_id = c.id AND asistio = 1) as asistentes_count
             FROM Clase c
             JOIN Actividad a ON c.actividad_id = a.id
@@ -95,7 +107,69 @@ export class Clase {
         return rows.length ? new Clase(rows[0]) : null;
     }
 
+    /**
+     * Verifica si hay solapamiento de horarios para un lugar dado.
+     * Considera la jerarquía de lugares (padres e hijos).
+     */
+    static async checkOverlap(lugarId, fecha, hora, horaFin, excludeClaseId = null) {
+        // Obtenemos info del lugar para saber su padre
+        const [lugarRows] = await pool.execute('SELECT parent_id FROM Lugar WHERE id = ?', [lugarId]);
+        if (lugarRows.length === 0) return null;
+        
+        const parentId = lugarRows[0].parent_id;
+
+        // Query para buscar solapamientos:
+        // 1. Mismo lugar
+        // 2. Si este es hijo, solapamiento con el padre
+        // 3. Si este es padre, solapamiento con cualquier hijo
+        let sql = `
+            SELECT c.*, l.nombre as lugar_nombre, a.nombre as actividad_nombre
+            FROM Clase c
+            JOIN Lugar l ON c.lugar_id = l.id
+            JOIN Actividad a ON c.actividad_id = a.id
+            WHERE c.fecha = ? 
+            AND c.deleted_at IS NULL
+            AND c.estado != 'cancelada'
+            AND (
+                c.lugar_id = ? 
+                ${parentId ? 'OR c.lugar_id = ?' : ''} 
+                OR l.parent_id = ?
+            )
+            AND (
+                (c.hora < ? AND c.hora_fin > ?)
+            )
+        `;
+
+        const params = [fecha, lugarId];
+        if (parentId) params.push(parentId);
+        params.push(lugarId); // Para el OR l.parent_id = ?
+        params.push(horaFin, hora);
+
+        if (excludeClaseId) {
+            sql += ' AND c.id != ?';
+            params.push(excludeClaseId);
+        }
+
+        const [rows] = await pool.execute(sql, params);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
     static async create(data) {
+        // Validación: Hora inicio < Hora fin
+        if (data.hora >= data.hora_fin) {
+            const error = new Error('La hora de inicio debe ser anterior a la hora de finalización.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        // Validación de solapamiento
+        const overlap = await this.checkOverlap(data.lugar_id, data.fecha, data.hora, data.hora_fin);
+        if (overlap) {
+            const error = new Error(`Espacio ocupado en ${overlap.lugar_nombre}: Ya existe la clase de "${overlap.actividad_nombre}" en el horario de ${overlap.hora.substring(0, 5)} a ${overlap.hora_fin.substring(0, 5)}.`);
+            error.statusCode = 400;
+            throw error;
+        }
+
         const sql = `
             INSERT INTO Clase (tipo, horario_id, actividad_id, lugar_id, profesor_id, fecha, hora, hora_fin, estado, motivo_cancelacion, observaciones, usuario_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -120,9 +194,41 @@ export class Clase {
     }
 
     static async update(id, data) {
+        const current = await this.findById(id);
+        if (!current) return null;
+
+        // Si se cambia lugar, fecha o algún horario, validamos solapamiento
+        const newLugarId = data.lugar_id || current.lugar_id;
+        const newFecha = data.fecha ? (typeof data.fecha === 'string' && data.fecha.includes('T') ? data.fecha.split('T')[0] : data.fecha) : (current.fecha instanceof Date ? current.fecha.toISOString().split('T')[0] : current.fecha);
+        const newHora = data.hora || current.hora;
+        const newHoraFin = data.hora_fin || current.hora_fin;
+
+        if (newHora >= newHoraFin) {
+            const error = new Error('La hora de inicio debe ser anterior a la hora de finalización.');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        // Solo validamos solapamiento si hay cambios en los campos clave O si se está activando una clase cancelada
+        const isChangingSchedule = (data.lugar_id && data.lugar_id != current.lugar_id) || 
+                                   (data.fecha && data.fecha != (current.fecha instanceof Date ? current.fecha.toISOString().split('T')[0] : current.fecha)) ||
+                                   (data.hora && data.hora != current.hora) ||
+                                   (data.hora_fin && data.hora_fin != current.hora_fin);
+        
+        const isReactivating = data.estado && data.estado != 'cancelada' && current.estado == 'cancelada';
+
+        if (isChangingSchedule || isReactivating) {
+            const overlap = await this.checkOverlap(newLugarId, newFecha, newHora, newHoraFin, id);
+            if (overlap) {
+                const error = new Error(`Solapamiento en ${overlap.lugar_nombre}: Ya existe clase de ${overlap.actividad_nombre} (${overlap.hora.substring(0, 5)} - ${overlap.hora_fin.substring(0, 5)})`);
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+
         const allowedFields = [
             'tipo', 'estado', 'motivo_cancelacion', 'observaciones', 
-            'fecha', 'hora', 'hora_fin', 'profesor_id',
+            'fecha', 'hora', 'hora_fin', 'profesor_id', 'actividad_id', 'lugar_id',
             'pago_espacio_realizado', 'fecha_pago_espacio', 'monto_pago_espacio', 'monto_referencia_espacio'
         ];
 

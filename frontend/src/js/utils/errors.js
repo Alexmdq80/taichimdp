@@ -3,31 +3,29 @@
  */
 
 /**
- * Display error message to user
+ * Display error message to user as a floating toast
  * @param {string} message - Error message
- * @param {HTMLElement} container - Container element to display error in
  */
-export function showError(message, container = document.body) {
-    // Remove existing error messages
-    const existingError = container.querySelector('.error-message');
-    if (existingError) {
-        existingError.remove();
-    }
+export function showError(message) {
+    // Remove existing error messages to avoid stacking too many
+    const existingErrors = document.querySelectorAll('.error-message');
+    existingErrors.forEach(el => el.remove());
 
     // Create error element
     const errorDiv = document.createElement('div');
     errorDiv.className = 'error-message';
-    errorDiv.textContent = message;
+    errorDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> <span>${message}</span>`;
     errorDiv.setAttribute('role', 'alert');
     errorDiv.setAttribute('aria-live', 'assertive');
 
-    // Insert at the beginning of container
-    container.insertBefore(errorDiv, container.firstChild);
+    // Always append to body for fixed positioning
+    document.body.appendChild(errorDiv);
 
     // Auto-remove after 5 seconds
     setTimeout(() => {
         if (errorDiv.parentNode) {
-            errorDiv.remove();
+            errorDiv.classList.add('fade-out'); // Optional: could add fade-out animation
+            setTimeout(() => errorDiv.remove(), 300);
         }
     }, 5000);
 }
@@ -46,7 +44,7 @@ export async function handleApiError(response) {
     }
 
     return {
-        message: errorData.error || 'An error occurred',
+        message: errorData.error || errorData.message || 'An error occurred',
         details: errorData.details,
         status: response.status
     };
@@ -54,10 +52,9 @@ export async function handleApiError(response) {
 
 /**
  * Display API error to user
- * @param {Object} error - Error object from handleApiError
- * @param {HTMLElement} container - Container element
+ * @param {Object} error - Error object
  */
-export function displayApiError(error, container = document.body) {
+export function displayApiError(error) {
     let message = error.message;
     if (error.details) {
         if (Array.isArray(error.details)) {
@@ -66,35 +63,32 @@ export function displayApiError(error, container = document.body) {
             message += ': ' + error.details;
         }
     }
-    showError(message, container);
+    showError(message);
 }
 
 /**
- * Display success message to user
+ * Display success message to user as a floating toast
  * @param {string} message - Success message
- * @param {HTMLElement} container - Container element to display message in
  */
-export function showSuccess(message, container = document.body) {
+export function showSuccess(message) {
     // Remove existing success messages
-    const existingSuccess = container.querySelector('.success-message');
-    if (existingSuccess) {
-        existingSuccess.remove();
-    }
+    const existingSuccesses = document.querySelectorAll('.success-message');
+    existingSuccesses.forEach(el => el.remove());
 
     // Create success element
     const successDiv = document.createElement('div');
     successDiv.className = 'success-message';
-    successDiv.textContent = message;
+    successDiv.innerHTML = `<i class="fas fa-check-circle mr-2"></i> <span>${message}</span>`;
     successDiv.setAttribute('role', 'alert');
     successDiv.setAttribute('aria-live', 'polite');
 
-    // Insert at the beginning of container
-    container.insertBefore(successDiv, container.firstChild);
+    // Always append to body
+    document.body.appendChild(successDiv);
 
-    // Auto-remove after 5 seconds
+    // Auto-remove after 4 seconds
     setTimeout(() => {
         if (successDiv.parentNode) {
             successDiv.remove();
         }
-    }, 5000);
+    }, 4000);
 }

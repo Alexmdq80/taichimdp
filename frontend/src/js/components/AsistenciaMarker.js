@@ -60,7 +60,9 @@ export class AsistenciaMarker {
                             </span>
                         </div>
                     </div>
-                    <button id="close-attendance-btn" class="btn btn-secondary">Volver al Listado</button>
+                    <div class="actions">
+                        <button id="close-attendance-btn" class="btn btn-secondary">Volver al Listado</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="attendance-alert" class="alert alert-warning mb-4" style="display: ${canModifyAttendanceInitial && c.estado !== 'cerrada' ? 'none' : 'block'};">
