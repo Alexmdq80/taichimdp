@@ -52,7 +52,7 @@ export class PracticanteDetail {
     this.container.innerHTML = `
       <div class="card">
         <!-- Bloque 1: Control de Navegación Superior -->
-        <div style="display: flex; justify-content: center; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--border-color); background-color: #fcfcfc; border-radius: 0.5rem 0.5rem 0 0; margin: -1.25rem -1.25rem 1.5rem -1.25rem;">
+        <div id="nav-controls" style="display: flex; justify-content: center; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--border-color); background-color: #fcfcfc; border-radius: 0.5rem 0.5rem 0 0; margin: -1.25rem -1.25rem 1.5rem -1.25rem;">
           <div style="display: flex; align-items: center; gap: 3rem;">
             <div style="width: 80px; display: flex; justify-content: center;">
               ${this.options.onPrev ? `
@@ -85,10 +85,11 @@ export class PracticanteDetail {
           </div>
 
           <!-- Bloque 3: Botones de Acción -->
-          <div class="flex justify-center gap-2 flex-wrap" style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+          <div id="action-buttons" class="flex justify-center gap-2 flex-wrap" style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
             <button id="edit-btn" class="btn" style="padding: 0.5rem 1.5rem;">Editar Perfil</button>
             <button id="receive-cuota-btn" class="btn btn-success" style="display: none; padding: 0.5rem 1.5rem;">Recibir Cuota Social</button>
             <button id="pay-abono-btn" class="btn btn-primary" style="padding: 0.5rem 1.5rem;">Pagar Abono</button>
+            <button id="print-btn" class="btn btn-outline-info" style="padding: 0.5rem 1.5rem;"><i class="fas fa-print"></i> Imprimir</button>
             <button id="close-btn" class="btn btn-secondary" style="padding: 0.5rem 1.5rem;">Cerrar</button>
           </div>
         </div>
@@ -164,7 +165,6 @@ export class PracticanteDetail {
           </form>
         </div>
       </div>
-        </div>
 
         <div class="grid grid-2" style="margin-top: 1rem;">
           <div>
@@ -399,6 +399,77 @@ export class PracticanteDetail {
             text-decoration: none;
             cursor: pointer;
         }
+
+        @media print {
+            /* Hide everything in body */
+            body > * {
+                display: none !important;
+            }
+            
+            /* Show only the app container and the main content where our card lives */
+            #app, #main-content {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Specifically ensure all parents of the card are visible but their other children are hidden */
+            header, footer, nav {
+                display: none !important;
+            }
+
+            .card {
+                display: block !important;
+                visibility: visible !important;
+                border: none !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Hide unwanted elements inside the card */
+            #nav-controls, #action-buttons, .modal, .delete-pago-btn, .add-partial-btn, .btn-group, .close-button, #payment-history-section {
+                display: none !important;
+            }
+
+            /* Force display of grid content in print */
+            .grid {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 2rem !important;
+            }
+
+            /* Ensure text colors are black for printing */
+            h2, h3, dt, dd, td, th, p, span, div {
+                color: #000 !important;
+            }
+            
+            dt {
+                font-weight: bold !important;
+                margin-top: 10px !important;
+            }
+
+            .badge {
+                border: 1px solid #000;
+                color: #000 !important;
+                background: none !important;
+            }
+            
+            /* Table optimization for print */
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            th, td {
+                border-bottom: 1px solid #ddd !important;
+                padding: 8px !important;
+                text-align: left !important;
+            }
+        }
       </style>
     `;
 
@@ -471,8 +542,15 @@ export class PracticanteDetail {
     const editBtn = this.container.querySelector('#edit-btn');
     const closeBtn = this.container.querySelector('#close-btn');
     const payAbonoBtn = this.container.querySelector('#pay-abono-btn');
+    const printBtn = this.container.querySelector('#print-btn');
     const prevBtn = this.container.querySelector('#prev-btn');
     const nextBtn = this.container.querySelector('#next-btn');
+
+    if (printBtn) {
+        printBtn.addEventListener('click', () => {
+            window.print();
+        });
+    }
     const paymentModal = this.container.querySelector('#payment-modal');
     const closePaymentModalBtn = paymentModal.querySelector('.close-button');
     const paymentForm = this.container.querySelector('#payment-form');
@@ -992,9 +1070,14 @@ export class PracticanteDetail {
 
   escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
   }
 }
 

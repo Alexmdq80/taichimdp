@@ -30,7 +30,12 @@ export class PracticanteList {
     this.container.innerHTML = `
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">Practicantes</h2>
+          <div class="flex justify-between items-center">
+            <h2 class="card-title">Practicantes</h2>
+            <button id="print-all-btn" class="btn btn-outline-info">
+              <i class="fas fa-print"></i> Imprimir Información de Salud de Todos
+            </button>
+          </div>
           <div class="flex gap-2" style="margin-top: 1rem;">
             <input 
               type="text" 
@@ -50,6 +55,92 @@ export class PracticanteList {
 
         <div id="pagination" style="margin-top: 1rem; text-align: center;"></div>
       </div>
+
+      <!-- Hidden area for printing all practicantes -->
+      <div id="print-area" class="print-only"></div>
+
+      <style>
+        @media print {
+            /* Hide everything in the body by default */
+            body > * {
+                display: none !important;
+            }
+            
+            /* Show only the app and main content containers but not their usual children */
+            #app, #main-content, #practicantes-page, #practicantes-content, #list-container {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Specifically hide headers, footers, nav, and the main card when printing the full list */
+            header, footer, nav, #practicantes-header, .card, #pagination, .spinner, .btn, .badge {
+                display: none !important;
+            }
+            
+            /* Show the print area explicitly */
+            #print-area {
+                display: block !important;
+                visibility: visible !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+
+            #print-area table th:first-child,
+            #print-area table td:first-child {
+                position: sticky;
+                left: 0;
+                background-color: #fff;
+                z-index: 10;
+                border-right: 2px solid #000 !important;
+            }
+
+            #print-area table th:first-child {
+                background-color: #eee;
+            }
+
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                font-size: 9px !important;
+            }
+            th, td {
+                border: 1px solid #000 !important;
+                padding: 4px !important;
+                text-align: left !important;
+                word-break: break-word !important;
+            }
+            th {
+                background-color: #eee !important;
+                -webkit-print-color-adjust: exact;
+                font-weight: bold !important;
+            }
+
+            /* Prevent wrapping for specific columns to fit content */
+            #print-area table th:nth-child(1),
+            #print-area table td:nth-child(1),
+            #print-area table th:nth-child(2),
+            #print-area table td:nth-child(2),
+            #print-area table th:nth-child(3),
+            #print-area table td:nth-child(3),
+            #print-area table th:nth-child(5),
+            #print-area table td:nth-child(5),
+            #print-area table th:nth-child(6),
+            #print-area table td:nth-child(6),
+            #print-area table th:nth-child(7),
+            #print-area table td:nth-child(7) {
+                white-space: nowrap;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+      </style>
     `;
 
     this.attachEvents();
@@ -60,6 +151,11 @@ export class PracticanteList {
     const searchInput = this.container.querySelector('#search-input');
     const searchBtn = this.container.querySelector('#search-btn');
     const clearBtn = this.container.querySelector('#clear-search-btn');
+    const printAllBtn = this.container.querySelector('#print-all-btn');
+
+    if (printAllBtn) {
+        printAllBtn.addEventListener('click', () => this.printAll());
+    }
 
     // Search on button click
     searchBtn.addEventListener('click', () => {
@@ -312,11 +408,99 @@ export class PracticanteList {
     }
   }
 
+  async printAll() {
+    const printArea = this.container.querySelector('#print-area');
+    const originalText = this.container.querySelector('#print-all-btn').innerHTML;
+    
+    try {
+        this.container.querySelector('#print-all-btn').disabled = true;
+        this.container.querySelector('#print-all-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+        
+        // Fetch all practicantes (up to 1000 as per backend limit)
+        const result = await practicanteApi.getAll('', 1, 1000);
+        const allPracticantes = result.data || [];
+
+        if (allPracticantes.length === 0) {
+            alert('No hay practicantes para imprimir.');
+            return;
+        }
+
+        let html = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h1>Listado General - Información de Salud</h1>
+                <p>Fecha de reporte: ${new Date().toLocaleDateString('es-ES')}</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre Completo</th>
+                        <th>DNI</th>
+                        <th>Fecha Nac.</th>
+                        <th>Información de Salud (Méd/Alér/Med/Lim)</th>
+                        <th>Contacto Emergencia</th>
+                        <th>Servicio Emergencia</th>
+                        <th>Obra Social / Afiliado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${allPracticantes.map(p => `
+                        <tr>
+                            <td><strong>${this.escapeHtml(p.nombre_completo)}</strong></td>
+                            <td>${p.dni || '-'}</td>
+                            <td>${p.fecha_nacimiento ? formatDateReadable(p.fecha_nacimiento) : '-'}</td>
+                            <td>
+                                ${p.condiciones_medicas ? `<b>Méd:</b> ${this.escapeHtml(p.condiciones_medicas)}<br>` : ''}
+                                ${p.alergias ? `<b>Alérg:</b> ${this.escapeHtml(p.alergias)}<br>` : ''}
+                                ${p.medicamentos ? `<b>Medic:</b> ${this.escapeHtml(p.medicamentos)}<br>` : ''}
+                                ${p.limitaciones_fisicas ? `<b>Limit:</b> ${this.escapeHtml(p.limitaciones_fisicas)}` : ''}
+                                ${!p.condiciones_medicas && !p.alergias && !p.medicamentos && !p.limitaciones_fisicas ? '-' : ''}
+                            </td>
+                            <td>
+                                ${p.emergencia_nombre ? `${this.escapeHtml(p.emergencia_nombre)}<br>(${p.emergencia_telefono || 'S/T'})` : '-'}
+                            </td>
+                            <td>
+                                ${p.emergencia_servicio ? `${this.escapeHtml(p.emergencia_servicio)}<br>(${p.emergencia_servicio_telefono || 'S/T'})` : '-'}
+                            </td>
+                            <td>
+                                ${p.obra_social ? `${this.escapeHtml(p.obra_social)}<br>${p.obra_social_nro || 'S/N'}` : '-'}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        printArea.innerHTML = html;
+        window.print();
+    } catch (error) {
+        console.error('Error preparing print:', error);
+        alert('Error al preparar el listado para imprimir.');
+    } finally {
+        this.container.querySelector('#print-all-btn').disabled = false;
+        this.container.querySelector('#print-all-btn').innerHTML = originalText;
+    }
+  }
+
+  formatGenero(genero) {
+    const map = {
+      'M': 'Masc.',
+      'F': 'Fem.',
+      'Otro': 'Otro',
+      'Prefiero no decir': 'P.N.D.'
+    };
+    return map[genero] || genero || '-';
+  }
+
   escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
   }
 }
 
