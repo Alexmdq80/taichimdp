@@ -329,4 +329,41 @@ router.get('/balance-mensual', asyncHandler(async (req, res) => {
     });
 }));
 
+/**
+ * GET /api/informes/practicantes/cumpleanos
+ * Reporte de cumpleaños de practicantes
+ */
+router.get('/practicantes/cumpleanos', asyncHandler(async (req, res) => {
+    const { mes, lugar_id } = req.query;
+    
+    let sql = `
+        SELECT 
+            p.nombre_completo, 
+            p.fecha_nacimiento, 
+            TIMESTAMPDIFF(YEAR, p.fecha_nacimiento, CURDATE()) AS edad,
+            l.nombre as sede_nombre
+        FROM Practicante p
+        LEFT JOIN Socio s ON s.practicante_id = p.id AND s.deleted_at IS NULL
+        LEFT JOIN Lugar l ON s.lugar_id = l.id
+        WHERE p.deleted_at IS NULL 
+          AND p.fecha_nacimiento IS NOT NULL
+    `;
+    const params = [];
+
+    if (mes) {
+        sql += ' AND MONTH(p.fecha_nacimiento) = ?';
+        params.push(mes);
+    }
+
+    if (lugar_id) {
+        sql += ' AND (l.id = ? OR l.parent_id = ?)';
+        params.push(lugar_id, lugar_id);
+    }
+
+    sql += ' ORDER BY MONTH(p.fecha_nacimiento), DAY(p.fecha_nacimiento), p.nombre_completo';
+
+    const [rows] = await pool.execute(sql, params);
+    res.json({ data: rows });
+}));
+
 export default router;

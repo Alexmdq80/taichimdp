@@ -30,6 +30,7 @@ export class InformesPage {
                             <option value="balance" ${this.currentReport === 'balance' ? 'selected' : ''}>Balance Mensual (Caja + Rentabilidad)</option>
                             <option value="cuotas" ${this.currentReport === 'cuotas' ? 'selected' : ''}>Resumen Cuotas Pagadas</option>
                             <option value="padron" ${this.currentReport === 'padron' ? 'selected' : ''}>Padrón Detallado de Socios</option>
+                            <option value="birthday" ${this.currentReport === 'birthday' ? 'selected' : ''}>Listado de Cumpleaños</option>
                             <option value="espacios" ${this.currentReport === 'espacios' ? 'selected' : ''}>Alquiler de Espacios</option>
                             <option value="consolidado" ${this.currentReport === 'consolidado' ? 'selected' : ''}>Liquidación Mensual (Cuotas + Alquiler)</option>
                         </select>
@@ -161,6 +162,8 @@ export class InformesPage {
                 endpoint = '/informes/cuotas-sociales';
             } else if (this.currentReport === 'padron') {
                 endpoint = '/informes/padron-socios-pagos';
+            } else if (this.currentReport === 'birthday') {
+                endpoint = '/informes/practicantes/cumpleanos';
             } else if (this.currentReport === 'consolidado') {
                 if (!this.selectedLugarId) {
                     content.innerHTML = '<div class="alert alert-warning">Debe seleccionar una Sede específica para el informe consolidado.</div>';
@@ -188,13 +191,15 @@ export class InformesPage {
     attachReportEvents() {
         const isCuotas = this.currentReport === 'cuotas';
         const isPadron = this.currentReport === 'padron';
+        const isBirthday = this.currentReport === 'birthday';
         const isEspacios = this.currentReport === 'espacios';
         const isConsolidado = this.currentReport === 'consolidado';
         
-        if (isCuotas || isPadron || isEspacios) {
+        if (isCuotas || isPadron || isBirthday || isEspacios) {
             let selectAllId = '';
             if (isCuotas) selectAllId = '#select-all-cuotas';
             else if (isPadron) selectAllId = '#select-all-padron';
+            else if (isBirthday) selectAllId = '#select-all-birthday';
             else if (isEspacios) selectAllId = '#select-all-espacios';
 
             const selectAll = this.container.querySelector(selectAllId);
@@ -210,6 +215,7 @@ export class InformesPage {
                     });
                     if (isCuotas) this.updateCuotasTotal();
                     if (isPadron) this.updatePadronTotal();
+                    if (isBirthday) this.updateBirthdayTotal();
                     if (isEspacios) this.updateEspaciosTotal();
                 };
             }
@@ -226,6 +232,7 @@ export class InformesPage {
                     }
                     if (isCuotas) this.updateCuotasTotal();
                     if (isPadron) this.updatePadronTotal();
+                    if (isBirthday) this.updateBirthdayTotal();
                     if (isEspacios) this.updateEspaciosTotal();
                 };
             });
@@ -337,6 +344,22 @@ export class InformesPage {
         }
     }
 
+    updateBirthdayTotal() {
+        if (this.currentReport !== 'birthday') return;
+        
+        const rowCheckboxes = this.container.querySelectorAll('.row-checkbox');
+        let count = 0;
+        
+        rowCheckboxes.forEach(cb => {
+            if (cb.checked) count++;
+        });
+        
+        const totalDisplay = this.container.querySelector('#birthday-total-display');
+        if (totalDisplay) {
+            totalDisplay.textContent = `Total de practicantes seleccionados: ${count} de ${this.data.length}`;
+        }
+    }
+
     updateEspaciosTotal() {
         if (this.currentReport !== 'espacios') return;
         
@@ -383,6 +406,8 @@ export class InformesPage {
             this.renderCuotasReport(content);
         } else if (this.currentReport === 'padron') {
             this.renderPadronReport(content);
+        } else if (this.currentReport === 'birthday') {
+            this.renderBirthdayReport(content);
         } else if (this.currentReport === 'consolidado') {
             this.renderConsolidadoReport(content);
         } else {
@@ -651,6 +676,47 @@ export class InformesPage {
                 </div>
                 <div class="mt-4 flex justify-between small text-muted">
                     <span id="padron-total-display">Total de registros: ${this.data.length}</span>
+                    <span class="text-right">
+                        Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    renderBirthdayReport(content) {
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const isSedeFiltered = this.selectedLugarId !== '';
+        const sedeNombre = isSedeFiltered ? this.lugares.find(l => l.id == this.selectedLugarId)?.nombre : 'Todas las Sedes';
+
+        content.innerHTML = `
+            <div class="report-paper p-4 bg-white border">
+                ${this.renderReportHeader('Listado de Cumpleaños', `${sedeNombre} - Mes: ${monthNames[this.selectedMonth - 1]} ${this.selectedYear}`)}
+                
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th class="no-print" style="width: 40px; text-align: center;"><input type="checkbox" id="select-all-birthday" checked title="Seleccionar todos"></th>
+                            <th>Nombre y Apellido</th>
+                            ${!isSedeFiltered ? '<th>Sede</th>' : ''}
+                            <th>Fecha de Nacimiento</th>
+                            <th class="text-right">Edad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.data.map((item, index) => `
+                            <tr data-index="${index}">
+                                <td class="no-print" style="text-align: center;"><input type="checkbox" class="row-checkbox" checked></td>
+                                <td>${item.nombre_completo}</td>
+                                ${!isSedeFiltered ? `<td>${item.sede_nombre || '-'}</td>` : ''}
+                                <td>${formatDateDashes(item.fecha_nacimiento)}</td>
+                                <td class="text-right">${item.edad} años</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="mt-4 flex justify-between small text-muted">
+                    <span id="birthday-total-display">Total de practicantes: ${this.data.length}</span>
                     <span class="text-right">
                         Documento generado por el Sistema de Gestión de Clases por Alex J. Actis Lobos el: ${new Date().toLocaleString()}
                     </span>
