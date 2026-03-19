@@ -3,6 +3,7 @@ import Clase from '../../models/Clase.js';
 import Asistencia from '../../models/Asistencia.js';
 import Deuda from '../../models/Deuda.js';
 import Lugar from '../../models/Lugar.js';
+import MovimientoCaja from '../../models/MovimientoCaja.js';
 import AsistenciaService from '../../services/asistenciaService.js';
 import { AppError, asyncHandler } from '../../utils/errors.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -155,6 +156,33 @@ router.put('/clases/:id', asyncHandler(async (req, res) => {
                     clase_id: clase.id
                 }, null, userId);
             }
+        }
+    }
+
+    // NEW: If the class was already paid and is being cancelled, create a credit note (Nota de Crédito)
+    // This provides a balance in favor with the Venue.
+    const isBeingCancelled = data.estado === 'cancelada' && clase.estado !== 'cancelada';
+    const wasAlreadyPaid = clase.pago_espacio_realizado === true || data.pago_espacio_realizado === true;
+
+    if (isBeingCancelled && wasAlreadyPaid) {
+        const montoCredito = data.monto_pago_espacio !== undefined ? parseFloat(data.monto_pago_espacio) : (clase.monto_pago_espacio || 0);
+        
+        if (montoCredito > 0) {
+            let descripcion = `Nota de Crédito por Clase Cancelada del ${clase.fecha} (${clase.hora})`;
+            if (data.observaciones || clase.observaciones) {
+                const obs = data.observaciones !== undefined ? data.observaciones : clase.observaciones;
+                if (obs) descripcion += ` - Obs: ${obs}`;
+            }
+
+            await MovimientoCaja.create({
+                tipo: 'ingreso',
+                monto: montoCredito,
+                categoria: 'Nota de Crédito',
+                descripcion: descripcion,
+                fecha: new Date().toISOString().split('T')[0],
+                lugar_id: clase.lugar_id,
+                usuario_id: userId
+            });
         }
     }
 

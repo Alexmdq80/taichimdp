@@ -574,11 +574,9 @@ export class InformesPage {
                                 const montoNum = parseFloat(a.monto || 0);
                                 
                                 let actividadDetalle = a.actividad_nombre;
-                                if (montoNum === 0 && isCancelled) {
+                                if (isCancelled) {
                                     const detalle = a.motivo_cancelacion || a.observaciones || '';
                                     actividadDetalle += ` <br><small class="text-danger">(${a.estado.toUpperCase()}${detalle ? ': ' + detalle : ''})</small>`;
-                                } else if (isCancelled) {
-                                    actividadDetalle += ` <small class="text-danger">(${a.estado.toUpperCase()})</small>`;
                                 }
 
                                 return `

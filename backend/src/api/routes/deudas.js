@@ -2,6 +2,7 @@ import express from 'express';
 import Deuda from '../../models/Deuda.js';
 import Practicante from '../../models/Practicante.js';
 import Abono from '../../models/Abono.js';
+import Pago from '../../models/Pago.js';
 import PagoService from '../../services/pagoService.js';
 import { asyncHandler, AppError } from '../../utils/errors.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -24,9 +25,12 @@ router.get('/', asyncHandler(async (req, res) => {
         SELECT * FROM (
             -- Manual debts from Deuda table
             SELECT 
-                d.id, d.practicante_id, d.monto, d.concepto, d.fecha, d.estado, d.created_at,
+                d.id, d.practicante_id, 
+                (d.monto - IFNULL((SELECT SUM(monto) FROM Pago WHERE deuda_id = d.id AND deleted_at IS NULL), 0)) as monto,
+                d.concepto, d.fecha, d.estado, d.created_at,
                 p.nombre_completo as practicante_nombre,
-                'manual' as tipo
+                'manual' as tipo,
+                d.monto as monto_original
             FROM Deuda d
             JOIN Practicante p ON d.practicante_id = p.id
             WHERE d.deleted_at IS NULL
@@ -42,7 +46,8 @@ router.get('/', asyncHandler(async (req, res) => {
                 'pendiente' as estado, 
                 a.created_at,
                 pr.nombre_completo as practicante_nombre,
-                'abono' as tipo
+                'abono' as tipo,
+                IFNULL(a.monto_pactado, 0) as monto_original
             FROM Abono a
             JOIN Practicante pr ON a.practicante_id = pr.id
             JOIN TipoAbono ta ON a.tipo_abono_id = ta.id
@@ -81,6 +86,7 @@ router.get('/', asyncHandler(async (req, res) => {
 router.put('/:id/pagar', asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const { tipo = 'manual' } = req.query;
+    const { monto_esperado, monto_pago } = req.body;
     const userId = req.user.userId;
 
     if (tipo === 'abono') {
@@ -88,21 +94,29 @@ router.put('/:id/pagar', asyncHandler(async (req, res) => {
         const abono = await Abono.findById(id);
         if (!abono) throw new AppError('Abono no encontrado', 404);
         
+        // Si el monto esperado cambia, actualizar Abono.monto_pactado
+        if (monto_esperado !== undefined && monto_esperado !== abono.monto_pactado) {
+            const oldAbono = abono.toJSON();
+            await pool.execute('UPDATE Abono SET monto_pactado = ? WHERE id = ?', [monto_esperado, id]);
+            const updatedAbono = await Abono.findById(id);
+            await Abono.recordHistory(id, 'UPDATE', oldAbono, updatedAbono.toJSON(), userId);
+        }
+
         const balance = await Abono.getBalance(id);
         if (balance.saldo_pendiente <= 0) throw new AppError('Este abono no tiene saldo pendiente', 400);
 
         // Record the payment to clear the debt
         const newPago = await PagoService.addPaymentToAbono(
             id, 
-            balance.saldo_pendiente, 
+            monto_pago || balance.saldo_pendiente, 
             'efectivo', // Default for quick pay
             new Date().toISOString().split('T')[0],
-            '[PAGO TOTAL DE SALDO DESDE GESTIÓN DE DEUDAS]',
+            `[PAGO REGISTRADO DESDE GESTIÓN DE DEUDAS]`,
             userId
         );
 
         return res.json({ 
-            message: 'Deuda de abono pagada y registrada correctamente', 
+            message: 'Pago de abono registrado correctamente', 
             data: newPago 
         });
     }
@@ -111,13 +125,37 @@ router.put('/:id/pagar', asyncHandler(async (req, res) => {
     if (!deuda) throw new AppError('Deuda no encontrada', 404);
     if (deuda.estado !== 'pendiente') throw new AppError('Solo se pueden pagar deudas pendientes', 400);
 
-    const sql = 'UPDATE Deuda SET estado = "pagada" WHERE id = ?';
-    await pool.execute(sql, [id]);
+    // Si el monto esperado cambia, actualizar Deuda.monto
+    if (monto_esperado !== undefined && monto_esperado !== deuda.monto) {
+        const oldDeuda = deuda.toJSON();
+        await pool.execute('UPDATE Deuda SET monto = ? WHERE id = ?', [monto_esperado, id]);
+        const updatedDeuda = await Deuda.findById(id);
+        await Deuda.recordHistory(id, 'UPDATE', oldDeuda, updatedDeuda.toJSON(), userId);
+        deuda.monto = monto_esperado; // Actualizar para el cálculo final
+    }
 
-    const updated = await Deuda.findById(id);
-    await Deuda.recordHistory(id, 'PAY', deuda.toJSON(), updated.toJSON(), userId);
+    // Crear un Pago con deuda_id = :id y monto = monto_pago
+    const newPago = await Pago.create({
+        practicante_id: deuda.practicante_id,
+        deuda_id: id,
+        monto: monto_pago || deuda.monto,
+        fecha: new Date().toISOString().split('T')[0],
+        metodo_pago: 'efectivo',
+        notas: `[PAGO DE DEUDA MANUAL: ${deuda.concepto}]`
+    }, null, userId);
 
-    res.json({ message: 'Deuda marcada como pagada', data: updated.toJSON() });
+    // Recalcular si la suma de pagos vinculados >= monto total de la deuda para marcarla como 'pagada'
+    const [pagos] = await pool.execute('SELECT SUM(monto) as total_pagado FROM Pago WHERE deuda_id = ? AND deleted_at IS NULL', [id]);
+    const totalPagado = pagos[0].total_pagado || 0;
+
+    if (totalPagado >= deuda.monto) {
+        await pool.execute('UPDATE Deuda SET estado = "pagada" WHERE id = ?', [id]);
+        const updated = await Deuda.findById(id);
+        await Deuda.recordHistory(id, 'PAY', deuda.toJSON(), updated.toJSON(), userId);
+        return res.json({ message: 'Deuda pagada por completo', data: updated.toJSON(), pago: newPago });
+    }
+
+    res.json({ message: 'Pago parcial registrado', pago: newPago });
 }));
 
 /**

@@ -8,6 +8,7 @@ export class Pago {
         this.id = data.id || null;
         this.practicante_id = data.practicante_id;
         this.abono_id = data.abono_id;
+        this.deuda_id = data.deuda_id || null;
         this.pago_socio_id = data.pago_socio_id || null;
         this.mes_abono = data.mes_abono || null;
         this.lugar_id = data.lugar_id || null;
@@ -37,13 +38,14 @@ export class Pago {
     static async create(data, connection = null, userId = null) {
         const sql = `
             INSERT INTO Pago (
-                practicante_id, abono_id, pago_socio_id, mes_abono, lugar_id, fecha, monto, metodo_pago, notas
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                practicante_id, abono_id, deuda_id, pago_socio_id, mes_abono, lugar_id, fecha, monto, metodo_pago, notas
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const values = [
             data.practicante_id,
             data.abono_id,
+            data.deuda_id || null,
             data.pago_socio_id || null,
             data.mes_abono || null,
             data.lugar_id || null,
@@ -74,7 +76,7 @@ export class Pago {
             SELECT * FROM (
                 -- Incomes (Student payments and Social Fees)
                 SELECT 
-                    p.id, p.practicante_id, p.abono_id, p.pago_socio_id, p.mes_abono, p.lugar_id, 
+                    p.id, p.practicante_id, p.abono_id, p.deuda_id, p.pago_socio_id, p.mes_abono, p.lugar_id, 
                     p.fecha, p.monto, p.metodo_pago, p.notas, p.deleted_at, p.created_at, p.updated_at,
                     COALESCE(ta.nombre, 'Recepción Cuota Social') as tipo_abono_nombre, 
                     ta.categoria, 
@@ -98,7 +100,7 @@ export class Pago {
 
                 -- Expenses (Costo de Espacio - from Clase)
                 SELECT 
-                    c.id * -1 as id, c.profesor_id as practicante_id, NULL as abono_id, NULL as pago_socio_id, 
+                    c.id * -1 as id, c.profesor_id as practicante_id, NULL as abono_id, NULL as deuda_id, NULL as pago_socio_id, 
                     NULL as mes_abono, c.lugar_id, 
                     COALESCE(c.fecha_pago_espacio, c.fecha) as fecha, 
                     IFNULL(c.monto_pago_espacio, 0) * -1 as monto, 
@@ -125,7 +127,7 @@ export class Pago {
 
                 -- Expenses (Pago Cuota Social al Club - from PagoSocio)
                 SELECT 
-                    ps.id * -1000 as id, pr.id as practicante_id, NULL as abono_id, ps.id as pago_socio_id, 
+                    ps.id * -1000 as id, pr.id as practicante_id, NULL as abono_id, NULL as deuda_id, ps.id as pago_socio_id, 
                     ps.mes_abono, l.id as lugar_id, 
                     ps.fecha_pago as fecha, 
                     ps.monto * -1 as monto, 
@@ -418,6 +420,7 @@ sql += ' ORDER BY fecha DESC, created_at DESC';
             id: this.id,
             practicante_id: this.practicante_id,
             abono_id: this.abono_id,
+            deuda_id: this.deuda_id,
             mes_abono: this.mes_abono,
             lugar_id: this.lugar_id,
             fecha: this.fecha,

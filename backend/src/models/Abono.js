@@ -141,6 +141,7 @@ export class Abono {
         const sql = `
             SELECT 
                 a.monto_pactado,
+                a.estado,
                 IFNULL(SUM(p.monto), 0) as total_pagado,
                 (IFNULL(a.monto_pactado, 0) - IFNULL(SUM(p.monto), 0)) as saldo_pendiente
             FROM Abono a
@@ -150,7 +151,7 @@ export class Abono {
         `;
         const executor = connection || pool;
         const [rows] = await executor.execute(sql, [id]);
-        return rows.length ? rows[0] : { monto_pactado: 0, total_pagado: 0, saldo_pendiente: 0 };
+        return rows.length ? rows[0] : { monto_pactado: 0, total_pagado: 0, saldo_pendiente: 0, estado: 'activo' };
     }
 
     /**

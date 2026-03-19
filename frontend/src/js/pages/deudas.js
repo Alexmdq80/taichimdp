@@ -81,11 +81,14 @@ export class DeudasPage {
                                     <span class="badge ${d.tipo === 'abono' ? 'badge-info' : 'badge-light'} mr-1">${d.tipo.toUpperCase()}</span>
                                     ${d.concepto}
                                 </td>
-                                <td><strong>$${parseFloat(d.monto).toFixed(2)}</strong></td>
+                                <td>
+                                    <strong>$${parseFloat(d.monto).toFixed(2)}</strong>
+                                    ${parseFloat(d.monto) < parseFloat(d.monto_original) ? `<br><small class="text-muted">de $${parseFloat(d.monto_original).toFixed(2)}</small>` : ''}
+                                </td>
                                 <td><span class="badge ${this.getBadgeClass(d.estado)}">${d.estado.toUpperCase()}</span></td>
                                 <td>
                                     ${d.estado === 'pendiente' ? `
-                                        <button class="btn btn-sm btn-success pay-deuda-btn" data-id="${d.id}" data-tipo="${d.tipo}" title="Pagar total"><i class="fas fa-check"></i> Pagar</button>
+                                        <button class="btn btn-sm btn-success pay-deuda-btn" data-id="${d.id}" data-tipo="${d.tipo}" title="Pagar"><i class="fas fa-hand-holding-usd"></i> Pagar</button>
                                         <button class="btn btn-sm btn-outline-danger cancel-deuda-btn" data-id="${d.id}" data-tipo="${d.tipo}" title="Anular"><i class="fas fa-times"></i> Anular</button>
                                     ` : ''}
                                     ${d.tipo === 'manual' ? `
@@ -122,13 +125,28 @@ export class DeudasPage {
     }
 
     async handlePay(id, tipo = 'manual') {
-        const msg = tipo === 'abono' 
-            ? '¿Registrar el pago total del saldo pendiente de este abono?' 
-            : '¿Marcar esta deuda como pagada?';
-        if (!confirm(msg)) return;
+        const deuda = this.deudas.find(d => d.id === id && d.tipo === tipo);
+        if (!deuda) return;
+
+        const promptEsperado = prompt(`Confirmar monto TOTAL de la deuda (Monto actual pactado: $${deuda.monto_original}):`, deuda.monto_original);
+        if (promptEsperado === null) return;
+        const monto_esperado = parseFloat(promptEsperado);
+
+        const promptPago = prompt(`Monto que entrega el alumno ahora (Saldo pendiente: $${deuda.monto}):`, deuda.monto);
+        if (promptPago === null) return;
+        const monto_pago = parseFloat(promptPago);
+
+        if (isNaN(monto_esperado) || isNaN(monto_pago)) {
+            alert('Por favor, ingrese montos válidos.');
+            return;
+        }
+
         try {
-            await apiClient.put(`/deudas/${id}/pagar?tipo=${tipo}`);
-            showSuccess(tipo === 'abono' ? 'Pago registrado y saldo cancelado' : 'Deuda pagada');
+            await apiClient.put(`/deudas/${id}/pagar?tipo=${tipo}`, {
+                monto_esperado,
+                monto_pago
+            });
+            showSuccess('Pago registrado correctamente');
             await this.loadData();
         } catch (error) { displayApiError(error); }
     }
